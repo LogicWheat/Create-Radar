@@ -46,7 +46,6 @@ import java.util.Map;
 import static riftyboi.cbcmodernwarfare.cannon_control.compact_mount.CompactCannonMountBlock.HORIZONTAL_FACING;
 
 public class CannonUtil {
-
     public static int getBarrelLength(AbstractMountedCannonContraption cannon) {
         if (cannon == null)
             return 0;
@@ -89,7 +88,6 @@ public class CannonUtil {
         }
         return offset;
     }
-
 
     public static float getRotarySpeed( AbstractMountedCannonContraption contraptionEntity) {
         if(!Mods.CBCMODERNWARFARE.isLoaded()) return 0f;

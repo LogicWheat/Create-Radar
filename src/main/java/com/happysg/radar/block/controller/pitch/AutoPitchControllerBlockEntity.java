@@ -95,6 +95,7 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
 
 
         mount.setPitch((float) currentPitch);
+        mount.notifyUpdate();
     }
 
     public boolean atTargetPitch() {
@@ -110,6 +111,7 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
 
     public void setTargetAngle(float targetAngle) {
         this.targetAngle = targetAngle;
+        notifyUpdate();
     }
 
 
@@ -152,6 +154,11 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
                 if(angles.isEmpty()) return;
                 if(angles.get(0).isEmpty()) return;
                 this.targetAngle = angles.get(0).get(0);
+
+                System.out.printf("Computed targetAngle (CBC) = %.3f rad (%.2f°)%n",
+                        this.targetAngle, Math.toDegrees(this.targetAngle)); // Debug
+
+
                 if(firingControl == null) return;
                 this.firingControl.cannonMount.setYaw(angles.get(0).get(1).floatValue());
             }
@@ -173,6 +180,9 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
                 } else if (!usableAngles.isEmpty()) {
                     targetAngle = usableAngles.get(0);
                 }
+
+                System.out.printf("Computed targetAngle (CBC) = %.3f rad (%.2f°)%n",
+                        this.targetAngle, Math.toDegrees(this.targetAngle)); // Debug
             }
         }
     }
