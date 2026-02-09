@@ -58,8 +58,7 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
     private double maxAngleDeg =  90.0;
     @Nullable private Vec3 lastTargetPos = null;
     // PhysBearing pitch limits in wrapped degrees: [0, 360) by default
-    private double physMinAngleDeg = 0.0;
-    private double physMaxAngleDeg = 360.0;
+
 
     public double getMinAngleDeg() { return minAngleDeg; }
     public double getMaxAngleDeg() { return maxAngleDeg; }
@@ -153,26 +152,6 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
         } else if (mount.kind == MountKind.PHYS && Mods.VS_CLOCKWORK.isLoaded()) {
             rotatePhysBearing(mount.phys);
         }
-
-        if (!level.isClientSide && level.getGameTime() % 40 == 0) {
-            if (level instanceof ServerLevel serverLevel) {
-                if (lastKnownPos.equals(worldPosition))
-                    return;
-
-                ResourceKey<Level> dim = serverLevel.dimension();
-                WeaponNetworkData data = WeaponNetworkData.get(serverLevel);
-                boolean updated = data.updateWeaponEndpointPosition(
-                        dim,
-                        lastKnownPos,
-                        worldPosition
-                );
-                if (updated) {
-                    lastKnownPos = worldPosition;
-                    LOGGER.debug("Controller moved {} -> {}", lastKnownPos, worldPosition);
-                    setChanged();
-                }
-            }
-        }
     }
 
     /** Horizontal controller: mount is in front of the controller. */
@@ -193,25 +172,6 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
         }
         if (level == null || level.isClientSide)
             return;
-
-        // first load or same position
-        if (lastKnownPos.equals(worldPosition)) {
-            lastKnownPos = worldPosition;
-            setChanged();
-            return;
-        }
-
-        // moved: tell the network
-        ServerLevel sl = (ServerLevel) level;
-        ResourceKey<Level> dim = sl.dimension();
-
-        NetworkData data = NetworkData.get(sl);
-        WeaponNetworkData wData = WeaponNetworkData.get(sl);
-
-        data.updateWeaponEndpointPosition(dim, lastKnownPos, worldPosition);
-        wData.updateWeaponEndpointPosition(dim,lastKnownPos,worldPosition);
-
-        lastKnownPos = worldPosition;
         setChanged();
     }
 
@@ -245,6 +205,7 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
         if (level == null || level.isClientSide || binoMode) return; // binoculars have priority
 
         if (firingControl == null) getFiringControl();
+        this.artillery = config.artillery();
 
         LOGGER.debug("PITCH setAndAcquireTrack track={} firingControl={}", tTrack == null ? "null" : tTrack.getId(), firingControl != null);
 
@@ -310,7 +271,7 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
         if (firingControl == null) getFiringControl();
         if (firingControl == null) return;
         if (!(level instanceof ServerLevel sl)) return;
-
+        this.artillery = config.artillery();
         var view = getWeaponGroup();
         if (view == null) return;
 
@@ -411,32 +372,41 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
     private double clampToLimitsCBC(double deg) {
         return Math.max(minAngleDeg, Math.min(maxAngleDeg, deg));
     }
+    private static boolean isAngleInWrappedRange(double angle, double min, double max) {
+        angle = wrap360(angle);
+        min = wrap360(min);
+        max = wrap360(max);
 
-    private double clampToLimitsPhys(double deg) {
-        deg = wrap360(deg);
-
-        double min = wrap360(physMinAngleDeg);
-        double max = wrap360(physMaxAngleDeg);
-
-        // if equal, i treat it as full range for bearings
-        if (Math.abs(shortestDelta(min, max)) < 1e-6) {
-            return deg;
+        if (min <= max) {
+            // normal case (ex: 30..120)
+            return angle >= min && angle <= max;
         }
 
-        boolean wraps = min > max;
+        // wrap case (ex: 270..90) == [-90..90]
+        return angle >= min || angle <= max;
+    }
 
-        if (!wraps) {
-            if (deg < min) return min;
-            if (deg > max) return max;
-            return deg;
-        }
+    private static double clampAngleToWrappedRange(double angle, double min, double max) {
+        angle = wrap360(angle);
+        min = wrap360(min);
+        max = wrap360(max);
 
-        // wrapping interval like 300..40
-        if (deg >= min || deg <= max) return deg;
+        if (isAngleInWrappedRange(angle, min, max))
+            return angle;
 
-        double dToMin = Math.abs(shortestDelta(deg, min));
-        double dToMax = Math.abs(shortestDelta(deg, max));
+        // i clamp to the nearest edge of the allowed range
+        double dToMin = wrappedDistance(angle, min);
+        double dToMax = wrappedDistance(angle, max);
         return (dToMin <= dToMax) ? min : max;
+    }
+
+    // smallest absolute distance between two angles on a circle
+    private static double wrappedDistance(double a, double b) {
+        double d = Math.abs(wrap360(a) - wrap360(b));
+        return Math.min(d, 360.0 - d);
+    }
+    private double clampToLimitsPhys(double deg) {
+            return clampAngleToWrappedRange(deg, minAngleDeg, maxAngleDeg);
     }
 
     // i clamp based on what i'm actually attached to
@@ -728,7 +698,7 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
         Mount m = resolveMount();
 
         if (m != null && m.kind == MountKind.PHYS) {
-            physMinAngleDeg = wrap360(v);
+            minAngleDeg = wrap360(v);
         } else {
             minAngleDeg = v;
             if (minAngleDeg > maxAngleDeg) {
@@ -747,7 +717,7 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
         Mount m = resolveMount();
 
         if (m != null && m.kind == MountKind.PHYS) {
-            physMaxAngleDeg = wrap360(v);
+            maxAngleDeg = wrap360(v);
         } else {
             maxAngleDeg = v;
             if (minAngleDeg > maxAngleDeg) {
@@ -789,9 +759,6 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
             maxAngleDeg = tmp;
         }
 
-        physMinAngleDeg = compound.contains("PhysMinAngleDeg", Tag.TAG_DOUBLE) ? compound.getDouble("PhysMinAngleDeg") : 0.0;
-        physMaxAngleDeg = compound.contains("PhysMaxAngleDeg", Tag.TAG_DOUBLE) ? compound.getDouble("PhysMaxAngleDeg") : 360.0;
-
 
         // smoothing state not persisted by design
         desiredTarget = null;
@@ -811,18 +778,14 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
         compound.putDouble("MinAngleDeg", minAngleDeg);
         compound.putDouble("MaxAngleDeg", maxAngleDeg);
 
-        compound.putDouble("PhysMinAngleDeg", physMinAngleDeg);
-        compound.putDouble("PhysMaxAngleDeg", physMaxAngleDeg);
-
     }
 
     @Override
     protected void copySequenceContextFrom(KineticBlockEntity sourceBE) {
-        // keep empty, matching yaw controller style
+
     }
 
 
-    // Geometry + helpers (PhysBearing mode)
     private static Vec3 forwardHoriz(Direction facing) {
         Vec3 f = new Vec3(facing.getStepX(), 0, facing.getStepZ());
         if (f.lengthSqr() < 1e-8)
@@ -899,7 +862,11 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
         if (a < 0) a += 360.0;
         return a;
     }
-
+    private static double wrap180(double deg) {
+        deg = wrap360(deg);
+        if (deg >= 180.0) deg -= 360.0;
+        return deg;
+    }
     private static double shortestDelta(double from, double to) {
         return ((to - from + 540.0) % 360.0) - 180.0;
     }

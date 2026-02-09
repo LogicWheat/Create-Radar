@@ -185,8 +185,8 @@ public class  ModCommands {
             }
         } else if (be instanceof AutoYawControllerBlockEntity yaw) {
 
-            min = Mth.clamp(min, -0, 360.0);
-            max = Mth.clamp(max, -0, 360.0);
+            min = Mth.clamp(min, -180, 180);
+            max = Mth.clamp(max, -180, 180);
 
             yaw.setMinAngleDeg(min);
             yaw.setMaxAngleDeg(max);

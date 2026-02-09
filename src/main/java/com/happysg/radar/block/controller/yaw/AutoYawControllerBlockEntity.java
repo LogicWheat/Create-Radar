@@ -1,6 +1,5 @@
 package com.happysg.radar.block.controller.yaw;
 
-import com.happysg.radar.block.behavior.networks.WeaponNetwork;
 import com.happysg.radar.block.behavior.networks.WeaponNetworkData;
 import com.happysg.radar.compat.Mods;
 import com.happysg.radar.compat.cbc.VS2CannonTargeting;
@@ -9,29 +8,21 @@ import com.happysg.radar.config.RadarConfig;
 import com.simibubi.create.content.kinetics.base.DirectionalKineticBlock;
 import com.simibubi.create.content.kinetics.base.KineticBlockEntity;
 import com.simibubi.create.foundation.blockEntity.behaviour.scrollValue.ScrollOptionBehaviour;
-import kotlin.Pair;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.fml.ModList;
-import org.jetbrains.annotations.NotNull;
 import org.joml.Vector3d;
-import org.joml.Vector3dc;
 import org.valkyrienskies.clockwork.content.contraptions.phys.bearing.PhysBearingBlockEntity;
 import org.valkyrienskies.clockwork.platform.api.ContraptionController;
-import org.valkyrienskies.core.api.ships.ServerShip;
 import org.valkyrienskies.core.api.ships.Ship;
 import org.valkyrienskies.mod.common.VSGameUtilsKt;
-import org.valkyrienskies.mod.common.assembly.ICopyableBlock;
-import rbasamoyai.createbigcannons.cannon_control.cannon_mount.CannonMountBlock;
 import rbasamoyai.createbigcannons.cannon_control.cannon_mount.CannonMountBlockEntity;
 import rbasamoyai.createbigcannons.cannon_control.contraption.AbstractMountedCannonContraption;
 import rbasamoyai.createbigcannons.cannon_control.contraption.PitchOrientedContraptionEntity;
@@ -40,7 +31,6 @@ import net.minecraft.core.Direction;
 
 import javax.annotation.Nullable;
 import java.util.List;
-import java.util.Map;
 
 public class AutoYawControllerBlockEntity extends KineticBlockEntity{
 
@@ -79,9 +69,6 @@ public class AutoYawControllerBlockEntity extends KineticBlockEntity{
 
         if (level == null || level.isClientSide())
             return;
-
-
-
         Mount mount = resolveMount();
         if (mount == null) return;
 
@@ -92,9 +79,10 @@ public class AutoYawControllerBlockEntity extends KineticBlockEntity{
             }
             return;
         }
-
         if (mount.kind == MountKind.PHYS && Mods.VS_CLOCKWORK.isLoaded()) {
-            maybeUpdateYawZeroFromCannonInitialOrientation(mount.phys);
+            if(level.getGameTime() %20 == 5) {
+                maybeUpdateYawZeroFromCannonInitialOrientation();
+            }
             currentmount = MountKind.PHYS;
             rotatePhysBearing(mount.phys);
         }
@@ -300,13 +288,11 @@ public class AutoYawControllerBlockEntity extends KineticBlockEntity{
         double nextCtlDeg;
 
         if (fullRange) {
-            // no limit arc to respect, so i can take the normal shortest path
             double move = Math.min(stepDeg, distCtl);
             nextCtlDeg = wrap360(currentCtlDeg + Math.signum(diffCtl) * move);
         } else {
-            // i step along the allowed arc only (prevents min<->max snapping)
             double currentParam = angleToAllowedParamOrNearest(currentCtlDeg, min, allowedLen);
-            double desiredParam = angleToAllowedParamOrNearest(desiredCtlDeg, min, allowedLen); // already inside, but this is safe
+            double desiredParam = angleToAllowedParamOrNearest(desiredCtlDeg, min, allowedLen);
 
             double deltaParam = desiredParam - currentParam;
             double move = Math.signum(deltaParam) * Math.min(Math.abs(deltaParam), stepDeg);
@@ -325,11 +311,8 @@ public class AutoYawControllerBlockEntity extends KineticBlockEntity{
         mount.setAngle((float) nextPhysDeg);
         mount.notifyUpdate();
     }
-    private void maybeUpdateYawZeroFromCannonInitialOrientation(PhysBearingBlockEntity phys) {
+    private void maybeUpdateYawZeroFromCannonInitialOrientation() {
         if (level == null) return;
-
-//        if (!PhysicsHandler.isBlockInShipyard(level, phys.getBlockPos()))
-//            return;
         BlockPos cannonPos =WeaponNetworkData.get((ServerLevel) level).getMountForController(level.dimension(),worldPosition);
         if(cannonPos == null)return;
         CannonMountBlockEntity cannonMount;
@@ -381,7 +364,7 @@ public class AutoYawControllerBlockEntity extends KineticBlockEntity{
     public double getMaxAngleDeg() { return maxAngleDeg; }
 
     public void setMinAngleDeg(double v) {
-        minAngleDeg = wrap360(v);
+        minAngleDeg = wrap360(wrap180(v));
         normalizeLimits();
         targetAngle = clampYawToLimits(targetAngle);
         notifyUpdate();
@@ -389,8 +372,7 @@ public class AutoYawControllerBlockEntity extends KineticBlockEntity{
     }
 
     public void setMaxAngleDeg(double v) {
-        maxAngleDeg = wrap360(v);
-        // i keep the range valid (supports wrap cases via normalizeLimits)
+        maxAngleDeg = wrap360(wrap180(v));
         normalizeLimits();
         targetAngle = clampYawToLimits(targetAngle);
         notifyUpdate();
@@ -405,21 +387,17 @@ public class AutoYawControllerBlockEntity extends KineticBlockEntity{
             default    -> 0.0;
         };
     }
-    // i map any angle to a param along the allowed arc [0..allowedLen]
-// if the angle is in the forbidden gap, i snap it to whichever endpoint is closer
+
     private static double angleToAllowedParamOrNearest(double angleDeg, double minDeg, double allowedLen) {
         double a = wrap360(angleDeg);
         double min = wrap360(minDeg);
 
-        // distance forward from min along the circle
         double d = wrap360(a - min); // [0..360)
 
-        // if i'm inside the allowed arc, i'm done
         if (d <= allowedLen) return d;
 
-        // i'm in the forbidden gap; i choose nearest endpoint (0 for min, allowedLen for max)
-        double distToMaxAlongCircle = d - allowedLen;     // how far past max i am (forward)
-        double distToMinAlongCircle = 360.0 - d;          // how far to wrap back to min
+        double distToMaxAlongCircle = d - allowedLen;
+        double distToMinAlongCircle = 360.0 - d;
 
         return (distToMaxAlongCircle <= distToMinAlongCircle) ? allowedLen : 0.0;
     }
@@ -435,26 +413,6 @@ public class AutoYawControllerBlockEntity extends KineticBlockEntity{
         maxAngleDeg = wrap360(maxAngleDeg);
     }
 
-    private double clampYawToLimits(double deg) {
-        deg = wrap360(deg);
-
-        // if min == max, treat it as FULL RANGE (not locked)
-        if (Math.abs(shortestDelta(minAngleDeg, maxAngleDeg)) < 1e-6) {
-            return deg;
-        }
-        boolean wraps = minAngleDeg > maxAngleDeg;
-        if (!wraps) {
-            if (deg < minAngleDeg) return minAngleDeg;
-            if (deg > maxAngleDeg) return maxAngleDeg;
-            return deg;
-        }
-        if (deg >= minAngleDeg || deg <= maxAngleDeg) {
-            return deg;
-        }
-        double dToMin = Math.abs(shortestDelta(deg, minAngleDeg));
-        double dToMax = Math.abs(shortestDelta(deg, maxAngleDeg));
-        return (dToMin <= dToMax) ? minAngleDeg : maxAngleDeg;
-    }
 
 
     private double getStep(double range, double dist) {
@@ -599,11 +557,48 @@ public class AutoYawControllerBlockEntity extends KineticBlockEntity{
         return VSGameUtilsKt.getShipManagingPos(level, worldPosition);
     }
 
-    // ===== Angle helpers =====
-    private static double wrap360(double a) {
-        a %= 360.0;
-        if (a < 0) a += 360.0;
-        return a;
+    private static double wrap360(double deg) {
+        deg %= 360.0;
+        if (deg < 0) deg += 360.0;
+        return deg;
+    }
+
+    // i keep angles in the nice user space [-180, 180)
+    private static double wrap180(double deg) {
+        deg = wrap360(deg);
+        if (deg >= 180.0) deg -= 360.0;
+        return deg;
+    }
+
+    private static boolean isAngleInWrappedRange(double angle, double min, double max) {
+        angle = wrap360(angle);
+        min = wrap360(min);
+        max = wrap360(max);
+
+        if (min <= max) return angle >= min && angle <= max;
+        return angle >= min || angle <= max;
+    }
+
+
+    private static double wrappedDistance(double a, double b) {
+        double d = Math.abs(wrap360(a) - wrap360(b));
+        return Math.min(d, 360.0 - d);
+    }
+
+
+    private double clampYawToLimits (double angle) {
+        double min  = minAngleDeg;
+        double max = maxAngleDeg;
+        angle = wrap360(angle);
+        min = wrap360(min);
+        max = wrap360(max);
+
+        if (isAngleInWrappedRange(angle, min, max))
+            return angle;
+
+        double dToMin = wrappedDistance(angle, min);
+        double dToMax = wrappedDistance(angle, max);
+        return (dToMin <= dToMax) ? min : max;
     }
 
     private static double shortestDelta(double from, double to) {
