@@ -10,9 +10,12 @@ import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.NotNull;
 
 public class AutoPitchControllerBlock extends HorizontalKineticBlock implements IBE<AutoPitchControllerBlockEntity> {
 
@@ -80,6 +83,28 @@ public class AutoPitchControllerBlock extends HorizontalKineticBlock implements 
             }
 
             level.destroyBlock(linkPos, true);
+        }
+    }
+    @Override
+    public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean isMoving) {
+        super.onPlace(state, level, pos, oldState, isMoving);
+
+        if (level.isClientSide) return;
+
+        BlockEntity be = level.getBlockEntity(pos);
+        if (be instanceof AutoPitchControllerBlockEntity pitch) {
+            pitch.markMountDirtyExternal();
+        }
+    }
+    @Override
+    public void neighborChanged(@NotNull BlockState state, @NotNull Level level, @NotNull BlockPos pos, @NotNull Block block, @NotNull BlockPos fromPos, boolean isMoving) {
+        super.neighborChanged(state, level, pos, block, fromPos, isMoving);
+
+        if (level.isClientSide) return;
+
+        BlockEntity be = level.getBlockEntity(pos);
+        if (be instanceof AutoPitchControllerBlockEntity pitch) {
+            pitch.onRelevantNeighborChanged(fromPos);
         }
     }
 }

@@ -9,6 +9,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.Level;
@@ -83,6 +85,17 @@ public class AutoYawControllerBlock extends DirectionalKineticBlock implements I
             }
 
             level.destroyBlock(linkPos, true);
+        }
+    }
+
+    public void neighborChanged(BlockState state, Level level, BlockPos pos, Block block, BlockPos fromPos, boolean isMoving) {
+        super.neighborChanged(state, level, pos, block, fromPos, isMoving);
+
+        if (level.isClientSide) return;
+
+        BlockEntity be = level.getBlockEntity(pos);
+        if (be instanceof AutoYawControllerBlockEntity yaw) {
+            yaw.onRelevantNeighborChanged(fromPos);
         }
     }
 }

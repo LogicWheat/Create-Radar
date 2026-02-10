@@ -677,7 +677,7 @@ public class WeaponFiringControl {
         }
 
 
-        LOGGER.warn("check_accel");
+
         Vec3 shooterVel;
         Vec3 shooterAccel;
         Vec3 targetVel;
@@ -746,7 +746,7 @@ public class WeaponFiringControl {
 
         // drive controllers using offsetAim
         if (this.pitchController != null) {
-            LOGGER.warn("ptfc");
+            //LOGGER.warn("ptfc");
             this.pitchController.setTarget(offsetAim);
         }
 

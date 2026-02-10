@@ -46,6 +46,10 @@ public class AutoYawControllerBlockEntity extends KineticBlockEntity{
 
     private boolean isRunning;
 
+    @Nullable private Mount cachedMount = null;
+    @Nullable private MountKind cachedMountKind = null;
+    private boolean mountDirty = true;
+    private BlockPos cachedAdjacentPos = BlockPos.ZERO;
     private final double MIN_MOVE_PER_TICK = 0.02;
     private static final double MAX_MOVE_PER_TICK = RadarConfig.server().controllerPhysbearingMaxSpeed.get();
     private static final double SNAP_DISTANCE = 32.0;
@@ -529,24 +533,63 @@ public class AutoYawControllerBlockEntity extends KineticBlockEntity{
         if (!state.hasProperty(DirectionalKineticBlock.FACING)) return false;
         return state.getValue(DirectionalKineticBlock.FACING) == Direction.UP;
     }
-
+    public void markMountDirtyExternal() {
+        // i expose this so the block can invalidate cache when my own state changes
+        markMountDirty();
+    }
     @Nullable
-    private Mount resolveMount() {
+    public Mount resolveMount() {
         if (level == null) return null;
-
-        BlockEntity adjacent = isUpsideDown()
-                ? level.getBlockEntity(worldPosition.below())
-                : level.getBlockEntity(worldPosition.above());
-
-        if (Mods.CREATEBIGCANNONS.isLoaded() && adjacent instanceof CannonMountBlockEntity cbc)
-            return new Mount(cbc);
-
-        if (Mods.VS_CLOCKWORK.isLoaded() && adjacent instanceof PhysBearingBlockEntity phys)
-            return new Mount(phys);
-
-        return null;
+        if (mountDirty) refreshMountCache();
+        return cachedMount;
     }
 
+    private void markMountDirty() {
+        mountDirty = true;
+    }
+    private void refreshMountCache() {
+        if (level == null) return;
+
+        BlockPos adjacentPos = isUpsideDown() ? worldPosition.below() : worldPosition.above();
+        cachedAdjacentPos = adjacentPos;
+
+        BlockEntity adjacent = level.getBlockEntity(adjacentPos);
+
+        Mount newMount = null;
+        MountKind newKind = null;
+
+        if (Mods.CREATEBIGCANNONS.isLoaded() && adjacent instanceof CannonMountBlockEntity cbc) {
+            newMount = new Mount(cbc);
+            newKind = MountKind.CBC;
+        } else if (Mods.VS_CLOCKWORK.isLoaded() && adjacent instanceof PhysBearingBlockEntity phys) {
+            newMount = new Mount(phys);
+            newKind = MountKind.PHYS;
+        }
+
+        // i update cached values
+        cachedMount = newMount;
+        cachedMountKind = newKind;
+        mountDirty = false;
+
+        // i keep your currentmount in sync so setTarget() keeps behaving the same
+        currentmount = (newKind != null) ? newKind : currentmount;
+
+        // optional: if mount goes away, stop running so it doesn't fight phantom state
+        if (newMount == null) {
+            isRunning = false;
+            hasYawZeroOffset = false;
+        }
+
+        setChanged();
+        notifyUpdate();
+    }
+    public void onRelevantNeighborChanged(BlockPos fromPos) {
+        // i only care if the neighbor that changed is the one i mount to
+        BlockPos adjacentPos = isUpsideDown() ? worldPosition.below() : worldPosition.above();
+        if (!fromPos.equals(adjacentPos)) return;
+
+        markMountDirty();
+    }
     @Nullable
     private Ship getShipIfPresent() {
         if (level == null) return null;

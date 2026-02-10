@@ -6,9 +6,11 @@ import com.happysg.radar.block.controller.id.IDManager;
 import com.happysg.radar.block.radar.behavior.IRadar;
 import com.happysg.radar.block.radar.track.RadarTrack;
 import com.happysg.radar.block.radar.track.TrackCategory;
+import com.happysg.radar.compat.vs2.PhysicsHandler;
 import com.happysg.radar.config.RadarConfig;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.logging.LogUtils;
 import com.mojang.math.Axis;
 import net.createmod.catnip.theme.Color;
 import net.minecraft.client.Minecraft;
@@ -29,7 +31,6 @@ import java.util.Collection;
 
 import java.util.UUID;
 
-import static com.happysg.radar.block.monitor.MonitorRenderer.getConeDirectionOnMonitor;
 
 /**
  * A UI screen version of the MonitorRenderer. Draws the radar in 2D and lets the player hover/click tracks.
@@ -176,7 +177,7 @@ public class MonitorScreen extends Screen {
         gg.setColor(1f, 1f, 1f, 1f);
         RenderSystem.disableBlend();
     }
-    private static Vec3 rotateAroundYDeg(Vec3 v, float deg) {
+    private Vec3 rotateAroundYDeg(Vec3 v, float deg) {
         double rad = Math.toRadians(deg);
         double cos = Math.cos(rad);
         double sin = Math.sin(rad);
@@ -195,11 +196,11 @@ public class MonitorScreen extends Screen {
         if(radarFacing ==null)return;
         float facingOffset = radarFacingOffsetDeg(monitorFacing, radarFacing);
         float screenAngle = (a + facingOffset) % 360f;
-        if(monitor.getShip() == null && radar.getRadarType().equals("spinning")){
+        if(monitor.getController().getShip() == null && radar.getRadarType().equals("spinning")){
              monitorFacing = monitor.getBlockState().getValue(MonitorBlock.FACING);
              radarFacing   = radar.getradarDirection();
-            if(radarFacing == null)return;// or however you store it
-
+            if(radarFacing == null)return;
+            LogUtils.getLogger().warn("here");
             MonitorRenderer.ConeDir2D cone = getConeDirectionOnMonitor(monitorFacing, radarFacing);
             switch (cone){
                 case NORTH -> screenAngle = 0+radar.getGlobalAngle();
@@ -208,8 +209,36 @@ public class MonitorScreen extends Screen {
                 case RIGHT -> screenAngle =270+radar.getGlobalAngle();
                 default -> screenAngle =30;
             }
-            screenAngle = screenAngle +180;
 
+        }else if (monitor.getController().getShip() != null && radar.getRadarType().equals("spinning")) { // spinning radar on a ship
+            // Calculate the current angle
+             monitorFacing = monitor.getController().getBlockState().getValue(MonitorBlock.FACING);
+            Vec3 facingVec = new Vec3(monitorFacing.getStepX(), monitorFacing.getStepY(), monitorFacing.getStepZ());
+            Vec3 angleVec = PhysicsHandler.getWorldVecDirectionTransform(facingVec, monitor.getController());
+            screenAngle = (float) Math.toDegrees(Math.atan2(angleVec.x, angleVec.z));
+
+            if (monitorFacing == Direction.NORTH || monitorFacing == Direction.SOUTH) {
+                screenAngle = (screenAngle + 180) % 360;
+            }
+
+            // Normalize to positive angles
+            screenAngle = (screenAngle + 360)+180 % 360;
+        }
+        if(radar.renderRelativeToMonitor() && monitor.getController().getShip() != null && !radar.getRadarType().equals("spinning")){  // plane radar on a ship
+            // Plane radar on ship - cone stays fixed, tracks rotate inside
+             monitorFacing = monitor.getController().getBlockState().getValue(MonitorBlock.FACING);
+             radarFacing   = radar.getradarDirection();
+            if(radarFacing == null)return;
+
+            MonitorRenderer.ConeDir2D cone = getConeDirectionOnMonitor(monitorFacing, radarFacing);
+            switch (cone){
+                case NORTH -> screenAngle = 0;
+                case DOWN -> screenAngle = 180;
+                case LEFT -> screenAngle = 90;
+                case RIGHT -> screenAngle = 270;
+                default -> screenAngle = 30;
+            }
+            screenAngle = screenAngle + 90;
         }
 
 
@@ -233,7 +262,25 @@ public class MonitorScreen extends Screen {
         RenderSystem.disableBlend();
     }
 
-    public static float radarFacingOffsetDeg(Direction monitorFacing, Direction radarFacing) {
+    public enum ConeDir2D { UP, RIGHT, DOWN, LEFT,NORTH }
+
+    public MonitorRenderer.ConeDir2D getConeDirectionOnMonitor(Direction monitorFacing, Direction radarFacing) {
+        // i only handle horizontals; if something weird comes in i just treat it as up
+
+        int m = monitorFacing.get2DDataValue(); // 0..3
+        int r = radarFacing.get2DDataValue();   // 0..3
+        // i compute clockwise steps from monitor -> radar
+        int steps = (r - m) & 3; // fast mod 4
+
+        return switch (steps) {
+            case 0 -> MonitorRenderer.ConeDir2D.NORTH;
+            case 1 -> MonitorRenderer.ConeDir2D.RIGHT;
+            case 2 -> MonitorRenderer.ConeDir2D.DOWN;
+            case 3 -> MonitorRenderer.ConeDir2D.LEFT;
+            default -> MonitorRenderer.ConeDir2D.UP;
+        };
+    }
+    public  float radarFacingOffsetDeg(Direction monitorFacing, Direction radarFacing) {
         if (monitorFacing.getAxis().isVertical() || radarFacing.getAxis().isVertical())
             return 0f;
 
@@ -247,7 +294,7 @@ public class MonitorScreen extends Screen {
     }
 
 
-    private static Vec3 rotateAroundY(Vec3 v, double angleRad) {
+    private  Vec3 rotateAroundY(Vec3 v, double angleRad) {
         double cos = Math.cos(angleRad);
         double sin = Math.sin(angleRad);
         double x = v.x * cos - v.z * sin;
@@ -255,7 +302,7 @@ public class MonitorScreen extends Screen {
         return new Vec3(x, v.y, z);
     }
 
-    private static double getShipYawRad(org.valkyrienskies.core.api.ships.Ship ship) {
+    private  double getShipYawRad(org.valkyrienskies.core.api.ships.Ship ship) {
         var transform = ship.getTransform();
 
         org.joml.Quaterniond shipToWorld = new org.joml.Quaterniond();

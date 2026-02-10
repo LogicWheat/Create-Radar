@@ -20,4 +20,5 @@ public class RadarServerConfig extends ConfigBase {
     public final ConfigBool gearRadarBearingSpeed = b(true, "gearRadarBearingSpeed", "If true, radar bearings will rotate slower the more dishes are connected to them");
     public final ConfigInt planeRadarRange = i(250,1,1000,"planeRadarRange","increases the range of the plane radar(in blocks)");
     public final ConfigFloat controllerPhysbearingMaxSpeed = f(25,2,25,"physMaxMove", "Increases the max Rotational speed of phys bearings controlled by Pitch/Yaw controllers");
+    public final ConfigInt maxRaysAllowed = i(1000,0,"maxRaysAllowed","The maximum number of active raycast checks performed by radar controlled turrets ");
 }

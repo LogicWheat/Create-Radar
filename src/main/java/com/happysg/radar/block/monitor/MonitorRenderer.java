@@ -195,7 +195,7 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
         float xmax = 1;
         float zmax = 1;
 
-        // Adjust UV coordinates based on grid spacing
+
         float u0 = -0.5f * gridSpacing, v0 = -0.5f * gridSpacing;
         float u1 = 0.5f * gridSpacing, v1 = -0.5f * gridSpacing;
         float u2 = 0.5f * gridSpacing, v2 = 0.5f * gridSpacing;
@@ -330,7 +330,7 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
             renderTrackLabel(ms, bufferSource, slug, xCenter, zBelow, depth, alpha);
         }
     }
-    private static Vec3 rotateAroundY(Vec3 v, double angleRad) {
+    private  Vec3 rotateAroundY(Vec3 v, double angleRad) {
         double cos = Math.cos(angleRad);
         double sin = Math.sin(angleRad);
 
@@ -345,7 +345,7 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
      * i compute ship yaw only (around world Y) relative to world NORTH (-Z).
      * result is radians, where 0 means ship forward points toward north ( -Z ).
      */
-    private static double getShipYawRad(Ship ship) {
+    private  double getShipYawRad(Ship ship) {
         var transform = ship.getTransform();
 
         Quaterniond shipToWorld = new Quaterniond();
@@ -365,7 +365,7 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
         // when fwd is (1,0,0)  => atan2(1, 0) = +pi/2 (east)
         return Math.atan2(fwd.x, -fwd.z);
     }
-    private static Vec3 rotateWorldVecIntoShipFrame(Ship ship, Vec3 worldVec) {
+    private  Vec3 rotateWorldVecIntoShipFrame(Ship ship, Vec3 worldVec) {
         var transform = ship.getTransform();
 
         Quaterniond worldToShip = new Quaterniond();
@@ -521,7 +521,7 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
         Color color = new Color(RadarConfig.client().groundRadarColor.get());
 
         float monitorAngle = 0;
-        if (controller.getShip() != null && radar.getRadarType().equals("spinning")) {
+        if (controller.getShip() != null && radar.getRadarType().equals("spinning")) { // spinning radar on a ship
             // Calculate the current angle
             Direction monitorFacing = controller.getBlockState().getValue(MonitorBlock.FACING);
             Vec3 facingVec = new Vec3(monitorFacing.getStepX(), monitorFacing.getStepY(), monitorFacing.getStepZ());
@@ -536,7 +536,7 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
             monitorAngle = (monitorAngle + 360)+180 % 360;
         }
         float currentAngle;
-        if(radar.renderRelativeToMonitor() && controller.getShip() != null && !radar.getRadarType().equals("spinning")){
+        if(radar.renderRelativeToMonitor() && controller.getShip() != null && !radar.getRadarType().equals("spinning")){  // plane radar on a ship
             // Plane radar on ship - cone stays fixed, tracks rotate inside
             Direction monitorFacing = controller.getBlockState().getValue(MonitorBlock.FACING);
             Direction radarFacing   = radar.getradarDirection();
@@ -551,8 +551,7 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
                 default -> currentAngle = 30;
             }
             currentAngle = currentAngle + 90;
-
-        }else{
+        }else{ // ground based spinning radar
             Direction monitorFacing = controller.getBlockState().getValue(MonitorBlock.FACING);
             Direction radarFacing   = radar.getradarDirection();
             ConeDir2D cone = getConeDirectionOnMonitor(monitorFacing, radarFacing);
@@ -563,7 +562,8 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
                 case RIGHT -> currentAngle = 270 + radar.getGlobalAngle();
                 default -> currentAngle = 30;
             }
-            currentAngle = currentAngle + 270; // I am not sure if this is right offset seemed wrong before.
+            currentAngle = currentAngle + 180;
+
         }
 
         // Make sure we're working with normalized angles
@@ -632,12 +632,10 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
 
     public enum ConeDir2D { UP, RIGHT, DOWN, LEFT,NORTH }
 
-    public static ConeDir2D getConeDirectionOnMonitor(Direction monitorFacing, Direction radarFacing) {
-        // i only handle horizontals; if something weird comes in i just treat it as up
+    public ConeDir2D getConeDirectionOnMonitor(Direction monitorFacing, Direction radarFacing) {
 
         int m = monitorFacing.get2DDataValue(); // 0..3
         int r = radarFacing.get2DDataValue();   // 0..3
-        // i compute clockwise steps from monitor -> radar
         int steps = (r - m) & 3; // fast mod 4
 
         return switch (steps) {
@@ -651,7 +649,6 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
 
 
     private  int cwStepsBetween(Direction from, Direction to) {
-        // i map NESW into 0..3 so i can do modular math
         int a = dirIndex(from);
         int b = dirIndex(to);
 

@@ -116,7 +116,7 @@ public class RadarScanningBlockBehavior extends BlockEntityBehaviour {
         super.tick();
         if (blockEntity.getLevel() == null || blockEntity.getLevel().isClientSide)
             return;
-
+        if(blockEntity.getLevel().getGameTime() %5!=1)return;
         removeDeadTracks();
         if (running)
             updateRadarTracks();
@@ -186,11 +186,26 @@ public class RadarScanningBlockBehavior extends BlockEntityBehaviour {
     }
 
     private void removeDeadTracks() {
+        // entities
         for (Entity entity : scannedEntities) {
             if (!entity.isAlive())
                 radarTracks.remove(entity.getUUID().toString());
         }
 
+        // vs2 ships
+        if (Mods.VALKYRIENSKIES.isLoaded()) {
+            assert blockEntity.getLevel() != null;
+
+            var shipWorld = org.valkyrienskies.mod.common.VSGameUtilsKt.getShipObjectWorld(blockEntity.getLevel());
+            // i remove ship tracks if the ship id no longer resolves (unloaded/despawned)
+            scannedShips.removeIf(ship -> {
+                boolean dead = shipWorld == null || shipWorld.getLoadedShips().getById(ship.getId()) == null;
+                if (dead) radarTracks.remove(String.valueOf(ship.getId()));
+                return dead;
+            });
+        }
+
+        // ttl expiration (works for everything: entities, ships, projectiles)
         List<String> toRemove = new ArrayList<>();
         assert blockEntity.getLevel() != null;
         long currentTime = blockEntity.getLevel().getGameTime();
@@ -198,9 +213,9 @@ public class RadarScanningBlockBehavior extends BlockEntityBehaviour {
             if (currentTime - track.scannedTime() > trackExpiration)
                 toRemove.add(track.id());
         }
-
         toRemove.forEach(radarTracks::remove);
 
+        // projectiles
         scannedProjectiles.removeIf(p -> {
             boolean dead = !p.isAlive();
             if (dead) radarTracks.remove(p.getUUID().toString());

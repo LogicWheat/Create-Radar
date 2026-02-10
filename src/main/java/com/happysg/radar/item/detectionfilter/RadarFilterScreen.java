@@ -199,7 +199,6 @@ public class RadarFilterScreen extends AbstractSimiScreen {
         flags[4] = animal;
         flags[5] = projectile;
         flags[6] = item;
-        flags[7] = true;
         BoolNBThelper.saveBooleansAsBytes(stack,flags, KEY);
 
         NetworkHandler.CHANNEL.sendToServer(new BoolListPacket(true, flags, KEY));

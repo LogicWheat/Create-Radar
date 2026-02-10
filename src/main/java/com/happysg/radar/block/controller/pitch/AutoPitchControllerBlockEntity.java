@@ -1,6 +1,5 @@
 package com.happysg.radar.block.controller.pitch;
 
-import com.happysg.radar.block.behavior.networks.NetworkData;
 import com.happysg.radar.block.behavior.networks.WeaponFiringControl;
 import com.happysg.radar.block.behavior.networks.WeaponNetworkData;
 import com.happysg.radar.block.behavior.networks.config.TargetingConfig;
@@ -18,7 +17,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
@@ -36,13 +34,11 @@ import org.valkyrienskies.clockwork.platform.api.ContraptionController;
 import org.valkyrienskies.core.api.ships.Ship;
 import org.valkyrienskies.mod.common.VSGameUtilsKt;
 import rbasamoyai.createbigcannons.cannon_control.cannon_mount.CannonMountBlockEntity;
-import rbasamoyai.createbigcannons.cannon_control.cannon_mount.YawControllerBlockEntity;
 import rbasamoyai.createbigcannons.cannon_control.contraption.AbstractMountedCannonContraption;
 import rbasamoyai.createbigcannons.cannon_control.contraption.PitchOrientedContraptionEntity;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -57,8 +53,11 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
     private double minAngleDeg = -90.0;
     private double maxAngleDeg =  90.0;
     @Nullable private Vec3 lastTargetPos = null;
-    // PhysBearing pitch limits in wrapped degrees: [0, 360) by default
 
+    @Nullable private Mount cachedMount = null;
+    @Nullable private MountKind cachedMountKind = null;
+    private boolean mountDirty = true;
+    private BlockPos cachedMountPos = BlockPos.ZERO;
 
     public double getMinAngleDeg() { return minAngleDeg; }
     public double getMaxAngleDeg() { return maxAngleDeg; }
@@ -73,8 +72,6 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
     private RadarTrack track;
 
     private BlockPos lastKnownPos = BlockPos.ZERO;
-    public float minAngle;
-    public float Max_angle;
     public WeaponFiringControl firingControl;
     public AutoYawControllerBlockEntity autoyaw;
     private static final double SNAP_DISTANCE = 32.0;
@@ -92,8 +89,6 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
     private  boolean binoMode;
     @Nullable
     private Vec3 smoothedTarget = null;
-
-    private boolean mountDirty = true;
     private int mountRecheckCooldown = 0;
     // cached mount
     private PhysBearingBlockEntity currentMount;
@@ -134,23 +129,13 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
             getFiringControl();
         }
 
-        Mount mount = resolveMount();
-        if (mount == null)
-            return;
+        if (cachedMount == null)refreshMountCache();
 
-        LOGGER.warn(
-                "PITCH.tick mount={} kind={} isRunning={} track={} bino={}",
-                mount,
-                mount.kind,
-                isRunning,
-                track != null,
-                binoMode
-        );
 
-        if (mount.kind == MountKind.CBC && Mods.CREATEBIGCANNONS.isLoaded()) {
-            rotateCBC(mount.cbc);
-        } else if (mount.kind == MountKind.PHYS && Mods.VS_CLOCKWORK.isLoaded()) {
-            rotatePhysBearing(mount.phys);
+        if (cachedMount.kind == MountKind.CBC && Mods.CREATEBIGCANNONS.isLoaded()) {
+            rotateCBC(cachedMount.cbc);
+        } else if (cachedMount.kind == MountKind.PHYS && Mods.VS_CLOCKWORK.isLoaded()) {
+            rotatePhysBearing(cachedMount.phys);
         }
     }
 
@@ -655,37 +640,69 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
             this.phys = phys;
         }
     }
+    private void refreshMountCache() {
+        if (level == null) return;
+
+        BlockPos mountPos = getMountPos();
+        cachedMountPos = (mountPos != null) ? mountPos : BlockPos.ZERO;
+
+        Mount newMount = null;
+        MountKind newKind = null;
+
+        if (mountPos != null) {
+            BlockEntity be = level.getBlockEntity(mountPos);
+
+            if (Mods.CREATEBIGCANNONS.isLoaded() && be instanceof CannonMountBlockEntity cbc) {
+                newMount = new Mount(cbc);
+                newKind = MountKind.CBC;
+            } else if (Mods.VS_CLOCKWORK.isLoaded() && be instanceof PhysBearingBlockEntity phys) {
+                newMount = new Mount(phys);
+                newKind = MountKind.PHYS;
+            }
+        }
+
+        cachedMount = newMount;
+        cachedMountKind = newKind;
+        mountDirty = false;
+
+        // optional: if mount disappears, stop motion so it doesn't fight ghost state
+        if (newMount == null) {
+            isRunning = false;
+            desiredTarget = null;
+            smoothedTarget = null;
+            lastCommandedDeg = Double.NaN;
+        }
+
+        setChanged();
+        notifyUpdate();
+    }
+
+    public void onRelevantNeighborChanged(BlockPos fromPos) {
+        // i only care if the block that changed is the one i'm attached to
+        BlockPos mountPos = getMountPos();
+        if (mountPos == null) return;
+
+        if (fromPos.equals(mountPos)) {
+            mountDirty = true;
+        }
+    }
+
+    public void markMountDirtyExternal() {
+        // i expose this so my block can invalidate when my own facing changes
+        mountDirty = true;
+    }
 
     @Nullable
     private Mount resolveMount() {
-        if (level == null)
-            return null;
+        if (level == null) return null;
+        if (mountDirty) refreshMountCache();
+        return cachedMount;
+    }
 
-        // Recheck/refresh phys cache periodically
-        if (!mountDirty && mountRecheckCooldown-- > 0) {
-
-        } else {
-
-
-            BlockPos front = isFacingCannonMount(level,worldPosition,getBlockState());
-            if (front == null) return null;
-            BlockEntity be = level.getBlockEntity(front);
-
-            // CBC first if present
-            if (Mods.CREATEBIGCANNONS.isLoaded() && be instanceof CannonMountBlockEntity cbc)
-                return new Mount(cbc);
-
-            // PhysBearing next if present
-            if (Mods.VS_CLOCKWORK.isLoaded()) {
-                if (be instanceof PhysBearingBlockEntity phys)
-                    return new Mount(phys);
-                if (currentMount != null)
-                    return new Mount(currentMount);
-            }
-
-
-        }
-        return null;
+    @Nullable
+    private BlockPos getMountPos() {
+        if (level == null) return null;
+        return isFacingCannonMount(level, worldPosition, getBlockState()); // your existing helper
     }
     public void setMinAngleDeg(double v) {
         Mount m = resolveMount();
