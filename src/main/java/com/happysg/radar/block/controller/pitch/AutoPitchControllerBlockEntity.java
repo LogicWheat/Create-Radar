@@ -520,12 +520,7 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
         }
 
         // Use mount directly to determine origin
-        Vec3 origin;
-        if (CannonUtil.isUp(mount)) {
-            origin = mount.getBlockPos().getCenter().add(0, 2.0, 0);
-        } else {
-            origin = mount.getBlockPos().getCenter().add(0, -2.0, 0);
-        }
+        Vec3 origin = getRayStart();
         List<Double> angles = CannonTargeting.calculatePitch(mount, origin, targetPos, serverLevel);
         LOGGER.debug(
                 "PITCH.solve origin={} target={} mountPos={}",
@@ -928,12 +923,7 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
                 List<List<Double>> angles = VS2CannonTargeting.calculatePitchAndYawVS2(mount.cbc, p, sl);
                 if (angles == null || angles.isEmpty() || angles.get(0).isEmpty()) return false;
             } else {
-                Vec3 origin;
-                if (CannonUtil.isUp(mount.cbc)) {
-                    origin = mount.cbc.getBlockPos().getCenter().add(0, 2.0, 0);
-                } else {
-                    origin = mount.cbc.getBlockPos().getCenter().add(0, -2.0, 0);
-                }
+                Vec3 origin = getRayStart();
                 List<Double> pitches = CannonTargeting.calculatePitch(mount.cbc, origin, p, sl);
                 if (pitches == null || pitches.isEmpty()) return false;
             }

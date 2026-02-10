@@ -146,6 +146,7 @@ public class WeaponFiringControl {
         return result;
     }
 
+    // Unused
     public Vec3 getCannonMuzzlePos() {
         if (cannonMount == null || level == null)
             return Vec3.ZERO;

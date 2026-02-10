@@ -101,7 +101,7 @@ public final class AutoTargetingHelper {
         float height = track.getEnityHeight();
         int blocksHigh = (int) Math.ceil(height);
 
-        Vec3 from = start.add(0, 2, 0);
+        Vec3 from = start;
 
         for (int h = blocksHigh - 1; h >= 0; h--) {
             Vec3 to = track.position().add(0, h + 0.5, 0);

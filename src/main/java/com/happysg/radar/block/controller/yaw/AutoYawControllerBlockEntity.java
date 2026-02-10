@@ -586,12 +586,14 @@ public class AutoYawControllerBlockEntity extends KineticBlockEntity{
     }
 
 
-    private double clampYawToLimits (double angle) {
-        double min  = minAngleDeg;
-        double max = maxAngleDeg;
+    private double clampYawToLimits(double angle) {
+        double min  = wrap360(minAngleDeg);
+        double max  = wrap360(maxAngleDeg);
         angle = wrap360(angle);
-        min = wrap360(min);
-        max = wrap360(max);
+
+        if (Math.abs(wrappedDistance(min, max)) < 1e-6) {
+            return angle;
+        }
 
         if (isAngleInWrappedRange(angle, min, max))
             return angle;
