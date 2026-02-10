@@ -40,7 +40,6 @@ public class VS2CannonTargeting {
         return calculatePitchAndYawVS2(level, chargePower, targetPos, mountPos, barrelLength, initialDirection, drag, gravity);
     }
 
-
     public static List<List<Double>> calculatePitchAndYawVS2(Level level, double speed, Vec3 targetPos, Vec3 mountPos, int barrelLength, Direction initialDirection, double drag, double gravity) {
         LoadedShip ship = VSGameUtilsKt.getShipObjectManagingPos(level,mountPos.x,mountPos.y,mountPos.z);
         if (ship == null) {

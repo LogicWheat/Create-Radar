@@ -123,6 +123,53 @@ public class CannonLead {
         return new SimResult(maxTicks, pos, vel);
     }
 
+    public static SimResult simulateFlightTicksCBC(
+            Vec3 muzzlePos,
+            Vec3 shooterVelPerTickAtFire,
+            Vec3 dirUnit,
+            double muzzleSpeedPerTick,
+
+            double gravityPerTick,
+            double formDrag,
+            boolean quadraticDrag,
+
+            double targetHorizontalDist,
+            int maxTicks
+    ) {
+        Vec3 pos = muzzlePos;
+        Vec3 vel = shooterVelPerTickAtFire.add(dirUnit.scale(muzzleSpeedPerTick));
+
+        double targetDistSqr = targetHorizontalDist * targetHorizontalDist;
+
+        for (int tick = 0; tick <= maxTicks; tick++) {
+            double dx = pos.x - muzzlePos.x;
+            double dz = pos.z - muzzlePos.z;
+            if (dx * dx + dz * dz >= targetDistSqr) {
+                return new SimResult(tick, pos, vel);
+            }
+
+            double speed = vel.length();
+
+            // accel = gravity + dragAccel
+            Vec3 accel = new Vec3(0.0, gravityPerTick, 0.0);
+
+            if (speed > 1.0e-9 && formDrag != 0.0) {
+                // CBC: dragForce = formDrag * density * |v| (*|v| if quadratic), capped to |v|
+                double dragForce = formDrag * speed;       // density assumed 1.0 (air)
+                if (quadraticDrag) dragForce *= speed;
+                dragForce = Math.min(dragForce, speed);
+
+                accel = accel.add(vel.normalize().scale(-dragForce));
+            }
+
+            // CBC integration
+            pos = pos.add(vel).add(accel.scale(0.5));
+            vel = vel.add(accel);
+        }
+
+        return new SimResult(maxTicks, pos, vel);
+    }
+
     // -------------------------
     // main solver
     // -------------------------
@@ -176,27 +223,26 @@ public class CannonLead {
             shooterVelPerTick = Vec3.ZERO;
             shooterAccelPerTick2 = Vec3.ZERO;
         }
-        // i’m assuming your CannonUtil returns "blocks/tick" tuned values (CBC-style)
+
         double muzzleSpeedPerTick = CannonUtil.getInitialVelocity(cannon, level);
         if (muzzleSpeedPerTick <= 0.0) return null;
 
-        // i’m matching your existing pitch solver origin so lead + pitch agree
         Vec3 originNow = PhysicsHandler.getWorldVec(level, mount.getBlockPos().above(2).getCenter());
         int barrelLength = CannonUtil.getBarrelLength(cannon);
 
-        double gravityPerTick = CannonUtil.getProjectileGravity(cannon, level);
-        double drag = CannonUtil.getProjectileDrag(cannon, level);
+        BallisticPropertiesComponent bp = CannonUtil.getBallistics(cannon, level);
+        double gravityPerTick = bp.gravity();         // (your old path was fine too)
+        double formDrag = bp.drag();
+        boolean quadratic = bp.isQuadraticDrag();
 
-        boolean noDrag =
-                CannonUtil.isAutoCannon(cannon) ||
-                        CannonUtil.isRotaryCannon(cannon) ||
-                        CannonUtil.isMediumCannon(cannon) ||
-                        CannonUtil.isTwinAutocannon(cannon) ||
-                        CannonUtil.isHeavyAutocannon(cannon);
 
         // i’m predicting shooter state at the moment the projectile spawns
         Vec3 shooterPosAtFire = predictPositionTicks(originNow, shooterVelPerTick, shooterAccelPerTick2, fireDelayTicks);
         Vec3 shooterVelAtFire = predictVelocityTicks(shooterVelPerTick, shooterAccelPerTick2, fireDelayTicks);
+
+        Vec3 targetPosRel0 = targetPosNow.subtract(shooterPosAtFire);
+        Vec3 targetVelRel = targetVelPerTick.subtract(shooterVelAtFire);
+        Vec3 targetAccelRel = targetAccelPerTick2.subtract(shooterAccelPerTick2);
 
         // initial guess: straight-line ticks (horizontal only)
         double dx0 = targetPosNow.x - shooterPosAtFire.x;
@@ -214,7 +260,8 @@ public class CannonLead {
             double tImpactTicks = fireDelayTicks + tGuessTicks;
 
             // i’m predicting the target at impact using constant acceleration
-            aimPoint = predictPositionTicks(targetPosNow, targetVelPerTick, targetAccelPerTick2, tImpactTicks);
+            Vec3 aimRel = predictPositionTicks(targetPosRel0, targetVelRel, targetAccelRel, tImpactTicks);
+            aimPoint = shooterPosAtFire.add(aimRel);
 
             // i’m yawing from the shooter position at fire time (where the projectile will actually spawn)
             Vec3 toPred = aimPoint.subtract(shooterPosAtFire);
@@ -240,16 +287,16 @@ public class CannonLead {
             double dz = aimPoint.z - muzzlePosAtFire.z;
             double horiz = Math.sqrt(dx * dx + dz * dz);
 
-            SimResult sim = simulateFlightTicks(
+            SimResult sim = simulateFlightTicksCBC(
                     muzzlePosAtFire,
                     shooterVelAtFire,
                     dir,
                     muzzleSpeedPerTick,
                     gravityPerTick,
-                    drag,
+                    formDrag,
+                    quadratic,
                     horiz,
-                    600,
-                    !noDrag
+                    600
             );
 
             int newFlightTicks = sim.ticks;
@@ -268,9 +315,6 @@ public class CannonLead {
         return new LeadSolution(aimPoint, chosenPitchDeg, chosenYawRad, flightTicks);
     }
 
-    // -------------------------
-    // debug helpers
-    // -------------------------
 
     public static void logLeadByBlocks(Vec3 targetPosNow, Vec3 aimPoint, Vec3 targetVelPerTick) {
         if (targetPosNow == null || aimPoint == null) return;

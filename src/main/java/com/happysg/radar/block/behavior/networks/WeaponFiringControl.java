@@ -967,7 +967,7 @@ public class WeaponFiringControl {
         boolean shouldFire =
                 targetingConfig.autoFire()
                         && hasLeadSolution
-                        && hasCorrectYawPitch()
+                        //&& hasCorrectYawPitch()
                         && !passesSafeZone()
                         //&& aimStableTicks == AIM_STABLE_REQUIRED
                         && hasPreFireClearShot(lastAimPoint);

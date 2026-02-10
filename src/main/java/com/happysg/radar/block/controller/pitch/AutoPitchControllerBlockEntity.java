@@ -477,7 +477,7 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
         } else {
             next = targetAngle;
         }
-        LOGGER.warn("ping" +mount);
+        LOGGER.debug("ping" +mount);
         mount.setPitch((float) next);
         mount.notifyUpdate();
     }
