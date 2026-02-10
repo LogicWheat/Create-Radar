@@ -3,15 +3,14 @@ package com.happysg.radar.block.behavior.networks;
 import com.happysg.radar.block.behavior.networks.config.TargetingConfig;
 import com.happysg.radar.block.controller.firing.FireControllerBlockEntity;
 import com.happysg.radar.block.controller.pitch.AutoPitchControllerBlockEntity;
-import com.happysg.radar.block.controller.yaw.AutoYawControllerBlock;
 import com.happysg.radar.block.controller.yaw.AutoYawControllerBlockEntity;
 import com.happysg.radar.block.radar.track.RadarTrack;
 import com.happysg.radar.block.radar.track.RadarTrackUtil;
+import com.happysg.radar.block.radar.track.TrackCategory;
 import com.happysg.radar.compat.Mods;
 import com.happysg.radar.compat.cbc.AccelerationTracker;
 import com.happysg.radar.compat.cbc.CannonLead;
 import com.happysg.radar.compat.cbc.VelocityTracker;
-import com.happysg.radar.compat.vs2.PhysicsHandler;
 import com.happysg.radar.compat.vs2.VS2ShipVelocityTracker;
 import com.happysg.radar.compat.vs2.VS2Utils;
 import com.happysg.radar.config.RadarConfig;
@@ -44,11 +43,9 @@ import java.util.UUID;
 public class WeaponFiringControl {
 
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static final int TARGET_TIMEOUT_TICKS = 20;
 
     public TargetingConfig targetingConfig = TargetingConfig.DEFAULT;
     private Vec3 target;
-    private boolean firing;
     private float offset;
 
     private Vec3 lastOffsetAim = null;
@@ -77,8 +74,8 @@ public class WeaponFiringControl {
     private static final double FACE_EPS = 0.01; // tiny offset outside faces
     private final java.util.Map<Integer, VisCache> visCache = new java.util.HashMap<>();
 
-    private static final int REACQUIRE_EVERY_TICKS = 10; // 10–20
-    private static final int MAX_NEW_PROBES_PER_REFRESH = 3; // 2–3 for 100 cannons
+    private static final int REACQUIRE_EVERY_TICKS = 10;
+    private static final int MAX_NEW_PROBES_PER_REFRESH = 3;
     private static final double FRAC_EPS = 1e-9;
 
     private static final int LOS_SELECTION_TTL_TICKS = 10;
@@ -380,15 +377,25 @@ public class WeaponFiringControl {
         long now = level.getGameTime();
 
         VisCache c = visCache.get(id);
-        if (c != null && (now - c.lastTick) < VIS_REFRESH_TICKS) {
-            if (c.hasFrac) {
-                return fracToWorld(inflatedAabb(f), c.fx, c.fy, c.fz);
-            }
-            return c.lastWorldPoint;
-        }
 
         Vec3 start = getCannonRayStart();
         if (start == null) return null;
+
+        if (c != null && (now - c.lastTick) < VIS_REFRESH_TICKS) {
+            Vec3 cached = null;
+
+            if (c.hasFrac) cached = fracToWorld(inflatedAabb(f), c.fx, c.fy, c.fz);
+            else cached = c.lastWorldPoint;
+
+            if (cached != null
+                    && isPointInShootableRange(cached)
+                    && !isOutOfKnownRange(cached)
+                    && rayClear(start, cached).isClear()) {
+                return cached;
+            }
+
+            c.lastTick = 0L;
+        }
 
         if (c == null) c = new VisCache();
 
@@ -397,7 +404,12 @@ public class WeaponFiringControl {
         c.lastTick = now;
         visCache.put(id, c);
 
-        if (c.hasFrac) return fracToWorld(inflatedAabb(f), c.fx, c.fy, c.fz);
+        if (vis == null) {
+            c.hasFrac = false;
+            c.lastWorldPoint = null;
+            return null;
+        }
+
         return vis;
     }
 
@@ -573,11 +585,12 @@ public class WeaponFiringControl {
     }
 
     // LOS query for network controller
-    public boolean hasLineOfSightTo(@Nullable RadarTrack track) {
+    public boolean hasLineOfSightTo(@Nullable RadarTrack track, boolean requireLos) {
         if (!isMountStateOk()) return false;
-        if (!targetingConfig.lineOfSight()) return true;
+        if (!requireLos) return true;
 
         if (track == null) return false;
+
         Vec3 p = track.position();
         if (p == null) return false;
 
@@ -608,22 +621,34 @@ public class WeaponFiringControl {
         Vec3 start = getCannonRayStart();
 
         if (level instanceof ServerLevel sl) {
+            // If it looks like an entity track, REQUIRE entity resolution for LOS
+            boolean shouldBeEntity =
+                    track.trackCategory() == TrackCategory.PLAYER ||
+                            track.trackCategory() == TrackCategory.HOSTILE ||
+                            track.trackCategory() == TrackCategory.ANIMAL ||
+                            track.trackCategory() == TrackCategory.PROJECTILE;
+
+            Entity e = null;
             try {
                 UUID uuid = UUID.fromString(track.getId());
-                Entity e = sl.getEntity(uuid);
-                if (e != null && e.isAlive()) {
-                    return getCachedVisiblePoint(e) != null;
-                }
+                e = sl.getEntity(uuid);
             } catch (Throwable ignored) {}
+
+            if (e != null && e.isAlive()) {
+                return getCachedVisiblePoint(e) != null;
+            }
+
+            if (shouldBeEntity) {
+                return false;
+            }
         }
 
-        // Otherwise fall back to a few vertical samples
+        // Non-entity tracks can keep the fallback samples
         for (int i = 0; i < 4; i++) {
             Vec3 end = p.add(0, 0.25 + i * 0.5, 0);
             if (!isPointInShootableRange(end)) continue;
             if (rayClear(start, end).isClear()) return true;
         }
-
         return false;
     }
 
@@ -744,22 +769,16 @@ public class WeaponFiringControl {
             return;
         }
 
-        if (binoMode || activetrack != null) {
+        if (binoMode) {
+            lastTargetTick = level.getGameTime();
+        } else if (activetrack != null && (targetEntity != null || targetShip != null)) {
             lastTargetTick = level.getGameTime();
         }
 
-        if (!binoMode && activetrack == null && target != null
-                && level.getGameTime() - lastTargetTick > TARGET_TIMEOUT_TICKS) {
-            LOGGER.debug("TARGET TIMEOUT: now={} last={} age={} target={} track={}",
-                    level.getGameTime(), lastTargetTick, (level.getGameTime()-lastTargetTick),
-                    target, activetrack != null ? activetrack.getId() : "null");
-            resetTarget();
+        if (!binoMode && activetrack == null) {
             stopFireCannon();
             return;
         }
-
-        LOGGER.debug("tick() start → target={} lastTargetTick={} safeZones={} autoFire={} firing={}", target, lastTargetTick, safeZones.size(), targetingConfig.autoFire(), firing);
-
 
         if (!binoMode && activetrack != null && level instanceof ServerLevel sl) {
 
@@ -770,15 +789,14 @@ public class WeaponFiringControl {
                 try {
                     id = Long.parseLong(activetrack.id());
                 } catch (NumberFormatException ignored) {
-                    resetTarget();
+                    stopFireCannon();
                     return;
                 }
                 if (targetShip == null || targetShipId != id) {
                     targetShip = getShipByUUID(sl, activetrack.id());
                     targetShipId = id;
                     if (targetShip == null) {
-                        resetTarget();
-                        targetEntity = null;
+                        stopFireCannon();
                         return;
                     }
                 }
@@ -790,8 +808,7 @@ public class WeaponFiringControl {
                 } catch (Throwable ignored) {}
 
                 if (e == null || !e.isAlive()) {
-                    resetTarget();
-                    targetShip = null;
+                    stopFireCannon();
                     return;
                 }
 
@@ -801,7 +818,7 @@ public class WeaponFiringControl {
         }
 
         if (!binoMode && activetrack != null && targetEntity == null && targetShip == null) {
-            resetTarget();
+            stopFireCannon();
             return;
         }
 
@@ -827,7 +844,7 @@ public class WeaponFiringControl {
 
         if (targetEntity != null) {
             if (!targetEntity.isAlive()) {
-                resetTarget();
+                stopFireCannon();
                 return;
             }
         }
@@ -836,13 +853,13 @@ public class WeaponFiringControl {
             try {
                 id = Long.parseLong(activetrack.id());
             } catch (NumberFormatException ignored) {
-                resetTarget();
+                stopFireCannon();
                 return;
             }
 
             Ship live = VSGameUtilsKt.getShipObjectWorld(serverLevel).getLoadedShips().getById(id);
             if (live == null) {
-                resetTarget();
+                stopFireCannon();
                 return;
             }
 
@@ -890,9 +907,13 @@ public class WeaponFiringControl {
 
         if (!binoMode && targetEntity != null) {
             Vec3 vis = getCachedVisiblePoint(targetEntity);
-            solvePos = (vis != null)
-                    ? vis
-                    : targetEntity.position().add(0.0, (targetEntity.getBbHeight() * 0.5)+.5, 0.0); // aim center mass
+
+            if (vis == null) {
+                stopFireCannon();
+                return;
+            }
+
+            solvePos = vis;
         }
 
         CannonLead.LeadSolution lead = null;
@@ -969,7 +990,6 @@ public class WeaponFiringControl {
         lastOffsetAim = null;
         aimStableTicks = 0;
 
-        pitchController.setTrack(null);
         stopFireCannon();
     }
 
@@ -977,15 +997,21 @@ public class WeaponFiringControl {
         LOGGER.debug("setTarget() → new target={} config={} atTick={}",
                 target, config, level != null ? level.getGameTime() : -1L);
         if (target == null) {
-            LOGGER.debug("  → target null, stopping fire");
             this.target = null;
-            stopFireCannon();
-            pitchController.setTargetAngle(0);
-            yawController.setTargetAngle(0);
+            this.activetrack = null;
+            this.targetEntity = null;
+            this.targetShip = null;
+            this.targetShipId = -1;
 
+            lastAimPoint = null;
+            lastOffsetAim = null;
+            aimStableTicks = 0;
+
+            stopFireCannon();
             return;
         }
         this.binoMode =false;
+
         this.target = target;//.add(0,offset,0);
 
         lastOffsetAim = null;
@@ -1051,6 +1077,7 @@ public class WeaponFiringControl {
 
         return yaw && pitch;
     }
+
 
     private void stopFireCannon() {
         if(this.fireController == null) return;

@@ -208,17 +208,17 @@ public class MonitorBlockEntity extends SmartBlockEntity implements IHaveHoverin
         if (g == null)
             return;
 
-        NetworkData data = NetworkData.get(sl);
-        data.setSelectedTargetId(g, track == null ? null : track.getId());
+        //NetworkData data = NetworkData.get(sl);
+        //data.setSelectedTargetId(g, track == null ? null : track.getId());
 
         // // Update monitor-side state
-        if (track == null) {
-            controllerBe.selectedEntity = null;
-            controllerBe.activetrack = null;
-        } else {
-            controllerBe.selectedEntity = track.getId();
-            controllerBe.activetrack = track;
-        }
+//        if (track == null) {
+//            controllerBe.selectedEntity = null;
+//            controllerBe.activetrack = null;
+//        } else {
+//            controllerBe.selectedEntity = track.getId();
+//            controllerBe.activetrack = track;
+//        }
 
 
 

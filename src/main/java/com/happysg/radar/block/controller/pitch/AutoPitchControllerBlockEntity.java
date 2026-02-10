@@ -130,6 +130,10 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
         }
 
         if (cachedMount == null)refreshMountCache();
+        if (cachedMount == null) {
+            isRunning = false;
+            return;
+        }
 
 
         if (cachedMount.kind == MountKind.CBC && Mods.CREATEBIGCANNONS.isLoaded()) {
@@ -235,9 +239,10 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
         return 0;
     }
 
+    @Nullable
     public Vec3 getRayStart() {
         if (firingControl == null) getFiringControl();
-        return firingControl != null ? firingControl.getCannonRayStart() : worldPosition.getCenter();
+        return firingControl != null ? firingControl.getCannonRayStart() : null;
     }
 
     public void setAndAcquirePos(@Nullable BlockPos binoTargetPos, TargetingConfig config, boolean reset) {
@@ -944,10 +949,6 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
             }
         }
 
-        if (requireLos) {
-            return firingControl.hasLineOfSightTo(track);
-        }
-
-        return true;
+        return firingControl.hasLineOfSightTo(track, requireLos);
     }
 }

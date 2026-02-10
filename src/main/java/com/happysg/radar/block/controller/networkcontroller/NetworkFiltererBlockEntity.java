@@ -62,6 +62,9 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
 
     private boolean selectedWasAuto = false;
 
+    private long suppressAutoUntilTick = 0L;
+    private static final int MANUAL_CLEAR_COOLDOWN_TICKS = 20;
+
     private long vsLoadedCacheUntilTick = -1;
     private final Map<Long, Boolean> vsLoadedCache = new HashMap<>();
 
@@ -140,7 +143,8 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
 
     private void headlessTick(ServerLevel sl) {
         NetworkData data = NetworkData.get(sl);
-        NetworkData.Group group = data.getOrCreateGroup(sl.dimension(), worldPosition);
+        NetworkData.Group group = data.getGroup(sl.dimension(), worldPosition);
+        if (group == null) return;
 
         targeting = readTargetingFromSlot();
 
@@ -162,7 +166,7 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
 
             if (group.selectedTargetId != null) {
                 selectedWasAuto = false;
-                applySelectedTarget(sl, data, group, null);
+                applySelectedTarget(sl, data, group, null, false);
             }
             return;
         }
@@ -176,7 +180,7 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
         if (selected != null && !isVsShipStillLoaded(sl, selected)) {
             selectedWasAuto = false;
 
-            applySelectedTarget(sl, data, group, null);
+            applySelectedTarget(sl, data, group, null, false);
             selected = null;
         }
 
@@ -184,7 +188,7 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
         if (group.selectedTargetId != null && selected == null) {
             selectedWasAuto = false;
 
-            applySelectedTarget(sl, data, group, null);
+            applySelectedTarget(sl, data, group, null, false);
             return;
         }
 
@@ -193,22 +197,29 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
 
             if (selectedWasAuto && !cfg.test(selected.trackCategory())) {
                 selectedWasAuto = false;
-                applySelectedTarget(sl, data, group, null);
+                applySelectedTarget(sl, data, group, null, false);
                 return;
             }
 
             if (selectedWasAuto && !cfg.autoTarget()) {
                 selectedWasAuto = false;
-                applySelectedTarget(sl, data, group, null);
+                applySelectedTarget(sl, data, group, null, false);
                 return;
             }
         }
 
         if (selected == null) {
+            long now = sl.getGameTime();
+            if (now < suppressAutoUntilTick) {
+                activeTrackCache = null;
+                pushToEndpoints(null);
+                return;
+            }
+
             RadarTrack picked = pickAutoTarget_PerCannon(sl, cachedTracks, safeZones);
             if (picked != null) {
                 selectedWasAuto = true;
-                applySelectedTarget(sl, data, group, picked);
+                applySelectedTarget(sl, data, group, picked, true);
             }
             return;
         }
@@ -222,18 +233,9 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
             return;
         }
 
-        if (selectedWasAuto && cfg.lineOfSight()) {
-            if (!anyCannonCanEngage(sl, selected, true)) {
-                RadarTrack better = pickAutoTarget_PerCannon(sl, cachedTracks, safeZones);
-                if (better != null) {
-                    selectedWasAuto = true;
-                    applySelectedTarget(sl, data, group, better);
-                } else {
-                    selectedWasAuto = false;
-                    applySelectedTarget(sl, data, group, null);
-                }
-                return;
-            }
+        if (selectedWasAuto && !anyCannonCanEngage(sl, selected, false)) {
+            dropOrReselectAuto(sl, data, group);
+            return;
         }
 
         activeTrackCache = selected;
@@ -265,8 +267,11 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
         return null;
     }
 
-    private void applySelectedTarget(ServerLevel sl, NetworkData data, NetworkData.Group group, @Nullable RadarTrack track) {
+    private void applySelectedTarget(ServerLevel sl, NetworkData data, NetworkData.Group group,
+                                     @Nullable RadarTrack track, boolean wasAuto) {
         String prev = data.getSelectedTargetId(group);
+
+        this.selectedWasAuto = wasAuto;
 
         data.setSelectedTargetId(group, track == null ? null : track.getId());
 
@@ -286,8 +291,11 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
                 }
             }
         }
+
         activeTrackCache = track;
         pushToEndpoints(track);
+
+        data.setDirty();
     }
 
     private double distSqFromFilterer(Vec3 pos) {
@@ -395,7 +403,15 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
 
 
         // sets canonical selectedTargetId + pushes to endpoints
-        applySelectedTarget(sl, data, group, track);
+        applySelectedTarget(sl, data, group, track, false);
+
+        long now = sl.getGameTime();
+        if (track == null) {
+            suppressAutoUntilTick = now + MANUAL_CLEAR_COOLDOWN_TICKS;
+        } else {
+            suppressAutoUntilTick = 0L;
+        }
+
         data.setDirty();
     }
 
@@ -847,10 +863,10 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
         RadarTrack picked = pickAutoTarget_PerCannon(sl, cachedTracks, safeZones);
         if (picked != null) {
             selectedWasAuto = true;
-            applySelectedTarget(sl, data, group, picked);
+            applySelectedTarget(sl, data, group, picked, true);
         } else {
             selectedWasAuto = false;
-            applySelectedTarget(sl, data, group, null);
+            applySelectedTarget(sl, data, group, null, false);
         }
     }
 }
