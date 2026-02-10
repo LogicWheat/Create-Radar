@@ -77,6 +77,9 @@ public class WeaponFiringControl {
     private static final double FACE_EPS = 0.01; // tiny offset outside faces
     private final java.util.Map<Integer, VisCache> visCache = new java.util.HashMap<>();
 
+    private static final int REACQUIRE_EVERY_TICKS = 10; // 10–20
+    private static final int MAX_NEW_PROBES_PER_REFRESH = 3; // 2–3 for 100 cannons
+    private static final double FRAC_EPS = 1e-9;
 
     private static final int LOS_SELECTION_TTL_TICKS = 10;
     private static final int LOS_PREFIRE_TTL_TICKS = 1;
@@ -90,8 +93,46 @@ public class WeaponFiringControl {
     private final LosCache losPrefireCache = new LosCache();
 
     private static final class VisCache {
-        Vec3 visiblePointOnTarget; // point we can see on the entity
-        long lastTick;
+        // Normalized point inside the entity AABB:
+        // fx=0 -> minX, fx=1 -> maxX (same for y/z)
+        boolean hasFrac = false;
+        double fx, fy, fz;
+
+        // For debugging / last resolved world point (optional)
+        @Nullable Vec3 lastWorldPoint = null;
+
+        int probeCursor = 0;
+        int blockedStreak = 0;
+        long lastTick = 0L;
+        long lastReacquireTick = 0L;
+    }
+
+    private static double clamp01(double v) {
+        return v < 0 ? 0 : (v > 1 ? 1 : v);
+    }
+
+    private static double invSpan(double min, double max) {
+        double span = max - min;
+        return Math.abs(span) < FRAC_EPS ? 0.0 : 1.0 / span;
+    }
+
+    private static Vec3 fracToWorld(AABB bb, double fx, double fy, double fz) {
+        return new Vec3(
+                bb.minX + (bb.maxX - bb.minX) * fx,
+                bb.minY + (bb.maxY - bb.minY) * fy,
+                bb.minZ + (bb.maxZ - bb.minZ) * fz
+        );
+    }
+
+    private static void worldToFrac(AABB bb, Vec3 p, VisCache c) {
+        double invX = invSpan(bb.minX, bb.maxX);
+        double invY = invSpan(bb.minY, bb.maxY);
+        double invZ = invSpan(bb.minZ, bb.maxZ);
+
+        c.fx = clamp01((p.x - bb.minX) * invX);
+        c.fy = clamp01((p.y - bb.minY) * invY);
+        c.fz = clamp01((p.z - bb.minZ) * invZ);
+        c.hasFrac = true;
     }
 
     public List<AABB> safeZones = new ArrayList<>();
@@ -338,24 +379,149 @@ public class WeaponFiringControl {
         int id = f.getId();
         long now = level.getGameTime();
 
-
         VisCache c = visCache.get(id);
         if (c != null && (now - c.lastTick) < VIS_REFRESH_TICKS) {
-            return c.visiblePointOnTarget;
+            if (c.hasFrac) {
+                return fracToWorld(inflatedAabb(f), c.fx, c.fy, c.fz);
+            }
+            return c.lastWorldPoint;
         }
 
-
         Vec3 start = getCannonRayStart();
-        Vec3 vis = findVisiblePointOnEntity(f, start, MAX_POINTS_PER_REFRESH);
-
+        if (start == null) return null;
 
         if (c == null) c = new VisCache();
-        c.visiblePointOnTarget = vis;
+
+        Vec3 vis = findVisiblePointOnEntityRotating(f, start, c, MAX_POINTS_PER_REFRESH);
+
         c.lastTick = now;
         visCache.put(id, c);
 
-
+        if (c.hasFrac) return fracToWorld(inflatedAabb(f), c.fx, c.fy, c.fz);
         return vis;
+    }
+
+    @Nullable
+    private Vec3 findVisiblePointOnEntityRotating(Entity e, Vec3 start, VisCache cache, int budget) {
+        AABB bb = inflatedAabb(e);
+        long now = level.getGameTime();
+
+        ArrayList<Vec3> candidates = new ArrayList<>(24);
+
+        Vec3 center = bb.getCenter();
+        Vec3 toCannon = start.subtract(center);
+
+        double ax = Math.abs(toCannon.x);
+        double ay = Math.abs(toCannon.y);
+        double az = Math.abs(toCannon.z);
+
+        double xMin = bb.minX, xMax = bb.maxX;
+        double yMin = bb.minY, yMax = bb.maxY;
+        double zMin = bb.minZ, zMax = bb.maxZ;
+
+        double yMid   = (yMin + yMax) * 0.5;
+        double yChest = yMin + (yMax - yMin) * 0.45;
+
+        // Preferred probes (best first)
+        Vec3 chest = new Vec3(center.x, yChest, center.z);
+        Vec3 mid   = new Vec3(center.x, yMid, center.z);
+
+        candidates.add(chest);
+        candidates.add(mid);
+
+        boolean useX = ax >= ay && ax >= az;
+        boolean useY = ay > ax && ay >= az;
+
+        if (useX) {
+            boolean maxFace = (toCannon.x >= 0);
+            double x = maxFace ? xMax : xMin;
+            addFaceCandidates(candidates, x, yMin, yMax, zMin, zMax, 'x', maxFace);
+        } else if (useY) {
+            boolean maxFace = (toCannon.y >= 0);
+            double y = maxFace ? yMax : yMin;
+            addFaceCandidates(candidates, y, xMin, xMax, zMin, zMax, 'y', maxFace);
+        } else {
+            boolean maxFace = (toCannon.z >= 0);
+            double z = maxFace ? zMax : zMin;
+            addFaceCandidates(candidates, z, xMin, xMax, yMin, yMax, 'z', maxFace);
+        }
+
+        // Secondary dominant face
+        if (ax >= az) {
+            boolean maxFace = (toCannon.x >= 0);
+            double x = maxFace ? xMax : xMin;
+            addFaceCandidates(candidates, x, yMin, yMax, zMin, zMax, 'x', maxFace);
+        } else {
+            boolean maxFace = (toCannon.z >= 0);
+            double z = maxFace ? zMax : zMin;
+            addFaceCandidates(candidates, z, xMin, xMax, yMin, yMax, 'z', maxFace);
+        }
+
+        candidates.add(center);
+
+        int n = candidates.size();
+        if (n == 0) return null;
+
+        int tries = 0;
+
+        if (cache.hasFrac) {
+            Vec3 cached = fracToWorld(bb, cache.fx, cache.fy, cache.fz);
+            if (isPointInShootableRange(cached)
+                    && !isOutOfKnownRange(cached)
+                    && rayClear(start, cached).isClear()) {
+
+                cache.blockedStreak = 0;
+
+                // Periodic reacquire back to chest
+                if (now - cache.lastReacquireTick >= REACQUIRE_EVERY_TICKS) {
+                    cache.lastReacquireTick = now;
+                    if (cached.distanceToSqr(chest) > 1e-4
+                            && isPointInShootableRange(chest)
+                            && !isOutOfKnownRange(chest)
+                            && rayClear(start, chest).isClear()) {
+
+                        worldToFrac(bb, chest, cache);
+                        cache.lastWorldPoint = chest;
+                        cache.probeCursor = 0;
+                        return chest;
+                    }
+                }
+
+                cache.lastWorldPoint = cached;
+                return cached;
+            }
+            tries++;
+        }
+
+        int remaining = budget - tries;
+        if (remaining <= 0) {
+            cache.blockedStreak++;
+            return null;
+        }
+
+        int maxNewTries = Math.min(MAX_NEW_PROBES_PER_REFRESH, remaining);
+
+        // If we just lost LOS, restart from best probes
+        int idx = (cache.blockedStreak == 0) ? 0 : Math.floorMod(cache.probeCursor, n);
+
+        for (int k = 0; k < maxNewTries; k++) {
+            Vec3 end = candidates.get((idx + k) % n);
+
+            if (!isPointInShootableRange(end)) continue;
+            if (isOutOfKnownRange(end)) continue;
+
+            if (rayClear(start, end).isClear()) {
+                worldToFrac(bb, end, cache);
+                cache.lastWorldPoint = end;
+                cache.probeCursor = (idx + k + 1) % n;
+                cache.blockedStreak = 0;
+                return end;
+            }
+        }
+
+        cache.probeCursor = (idx + maxNewTries) % n;
+        cache.blockedStreak++;
+        return null;
     }
 
     private boolean checkLineOfSight(Vec3 target) {
@@ -618,19 +784,26 @@ public class WeaponFiringControl {
                 }
                 targetEntity = null;
             } else {
-                if (targetEntity == null) {
-                    targetEntity = getEntityByUUID(sl, UUID.fromString(activetrack.id()));
-                    if (targetEntity == null || !targetEntity.isAlive()) {
-                        resetTarget();
-                        targetShip = null;
-                        return;
-                    }
+                Entity e = null;
+                try {
+                    e = getEntityByUUID(sl, UUID.fromString(activetrack.id()));
+                } catch (Throwable ignored) {}
+
+                if (e == null || !e.isAlive()) {
+                    resetTarget();
+                    targetShip = null;
+                    return;
                 }
+
+                targetEntity = e;
                 targetShip = null;
             }
         }
 
-
+        if (!binoMode && activetrack != null && targetEntity == null && targetShip == null) {
+            resetTarget();
+            return;
+        }
 
         if (!binoMode) {
             if (targetShip != null) {
@@ -775,7 +948,7 @@ public class WeaponFiringControl {
                         && hasLeadSolution
                         && hasCorrectYawPitch()
                         && !passesSafeZone()
-                        && aimStableTicks == AIM_STABLE_REQUIRED
+                        //&& aimStableTicks == AIM_STABLE_REQUIRED
                         && hasPreFireClearShot(lastAimPoint);
 
         if (fireController != null) {
