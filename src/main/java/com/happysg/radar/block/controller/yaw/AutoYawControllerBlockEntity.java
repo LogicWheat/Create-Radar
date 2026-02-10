@@ -603,6 +603,23 @@ public class AutoYawControllerBlockEntity extends KineticBlockEntity{
         return (dToMin <= dToMax) ? min : max;
     }
 
+    public boolean canPossiblyAimAt(Vec3 originWorld, Vec3 targetWorld) {
+        if (originWorld == null || targetWorld == null) return false;
+
+        Vec3 d = targetWorld.subtract(originWorld);
+        if (d.lengthSqr() < 1.0e-6) return true;
+
+        double yawDeg = Math.toDegrees(Math.atan2(d.z, d.x)) - 90.0;
+        yawDeg = wrap360(yawDeg);
+
+        double min = wrap360(minAngleDeg);
+        double max = wrap360(maxAngleDeg);
+
+        if (min == max) return true;
+
+        return isAngleInWrappedRange(yawDeg, min, max);
+    }
+
     private static double shortestDelta(double from, double to) {
         return ((to - from + 540.0) % 360.0) - 180.0;
     }

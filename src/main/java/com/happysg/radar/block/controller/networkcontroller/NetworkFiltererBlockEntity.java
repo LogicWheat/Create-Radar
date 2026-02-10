@@ -299,7 +299,20 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
     }
 
     private boolean anyCannonCanEngage(ServerLevel sl, RadarTrack track, boolean requireLos) {
+        Vec3 target = track != null ? track.position() : null;
+        if (target == null) return false;
+
         for (AutoPitchControllerBlockEntity pitch : getWeaponEndpointsCached(sl)) {
+            pitch.getFiringControl();
+
+            Vec3 origin = pitch.getRayStart();
+            if (origin == null) continue;
+
+            if (pitch.autoyaw != null && !pitch.autoyaw.canPossiblyAimAt(origin, target)) {
+                continue;
+            }
+
+            // existing heavier check
             if (pitch.canEngageTrack(track, requireLos)) return true;
         }
         return false;

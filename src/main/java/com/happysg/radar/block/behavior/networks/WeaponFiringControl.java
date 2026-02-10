@@ -78,6 +78,17 @@ public class WeaponFiringControl {
     private final java.util.Map<Integer, VisCache> visCache = new java.util.HashMap<>();
 
 
+    private static final int LOS_SELECTION_TTL_TICKS = 10;
+    private static final int LOS_PREFIRE_TTL_TICKS = 1;
+
+    private static final class LosCache {
+        boolean ok;
+        long tick;
+    }
+
+    private final java.util.Map<String, LosCache> losSelectionCache = new java.util.HashMap<>();
+    private final LosCache losPrefireCache = new LosCache();
+
     private static final class VisCache {
         Vec3 visiblePointOnTarget; // point we can see on the entity
         long lastTick;
@@ -404,12 +415,32 @@ public class WeaponFiringControl {
         Vec3 p = track.position();
         if (p == null) return false;
 
-        // Don’t waste rays on out-of-range
         if (!isPointInShootableRange(p)) return false;
+
+        long now = level.getGameTime();
+        String key = track.getId();
+
+        LosCache c = losSelectionCache.get(key);
+        if (c != null && (now - c.tick) <= LOS_SELECTION_TTL_TICKS) {
+            return c.ok;
+        }
+
+        boolean ok = computeLosToTrack(track);
+        if (c == null) c = new LosCache();
+        c.ok = ok;
+        c.tick = now;
+        losSelectionCache.put(key, c);
+
+        return ok;
+    }
+
+    private boolean computeLosToTrack(@Nullable RadarTrack track) {
+        if (track == null) return false;
+        Vec3 p = track.position();
+        if (p == null) return false;
 
         Vec3 start = getCannonRayStart();
 
-        // If we can resolve an entity, use multi-point visible-surface probing
         if (level instanceof ServerLevel sl) {
             try {
                 UUID uuid = UUID.fromString(track.getId());
@@ -420,6 +451,7 @@ public class WeaponFiringControl {
             } catch (Throwable ignored) {}
         }
 
+        // Otherwise fall back to a few vertical samples
         for (int i = 0; i < 4; i++) {
             Vec3 end = p.add(0, 0.25 + i * 0.5, 0);
             if (!isPointInShootableRange(end)) continue;
@@ -427,6 +459,23 @@ public class WeaponFiringControl {
         }
 
         return false;
+    }
+
+    private boolean hasPreFireClearShot(@Nullable Vec3 aimPoint) {
+        if (aimPoint == null) return false;
+        if (!targetingConfig.lineOfSight()) return true;
+
+        long now = level.getGameTime();
+        if ((now - losPrefireCache.tick) <= LOS_PREFIRE_TTL_TICKS) {
+            return losPrefireCache.ok;
+        }
+
+        Vec3 start = getCannonRayStart();
+        boolean ok = rayClear(start, aimPoint).isClear();
+
+        losPrefireCache.ok = ok;
+        losPrefireCache.tick = now;
+        return ok;
     }
 
     private void debugRay(ServerLevel server, Vec3 start, Vec3 end, RayResult result) {
@@ -726,7 +775,8 @@ public class WeaponFiringControl {
                         && hasLeadSolution
                         && hasCorrectYawPitch()
                         && !passesSafeZone()
-                        && aimStableTicks == AIM_STABLE_REQUIRED;
+                        && aimStableTicks == AIM_STABLE_REQUIRED
+                        && hasPreFireClearShot(lastAimPoint);
 
         if (fireController != null) {
             if (shouldFire) tryFireCannon();

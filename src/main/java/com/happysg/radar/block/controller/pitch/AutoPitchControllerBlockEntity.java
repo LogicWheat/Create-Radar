@@ -252,9 +252,7 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
 
     public Vec3 getRayStart() {
         if (firingControl == null) getFiringControl();
-        return firingControl != null
-                ? firingControl.getCannonRayStart()
-                : worldPosition.getCenter();
+        return firingControl != null ? firingControl.getCannonRayStart() : worldPosition.getCenter();
     }
 
     public void setAndAcquirePos(@Nullable BlockPos binoTargetPos, TargetingConfig config, boolean reset) {
