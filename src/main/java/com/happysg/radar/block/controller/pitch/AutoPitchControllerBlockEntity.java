@@ -194,7 +194,7 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
         if (level == null || level.isClientSide || binoMode) return; // binoculars have priority
 
         if (firingControl == null) getFiringControl();
-        this.artillery = config.artillery();
+
 
         LOGGER.debug("PITCH setAndAcquireTrack track={} firingControl={}", tTrack == null ? "null" : tTrack.getId(), firingControl != null);
 
@@ -259,7 +259,7 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
         if (firingControl == null) getFiringControl();
         if (firingControl == null) return;
         if (!(level instanceof ServerLevel sl)) return;
-        this.artillery = config.artillery();
+
         var view = getWeaponGroup();
         if (view == null) return;
 

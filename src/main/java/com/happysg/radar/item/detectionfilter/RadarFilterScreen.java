@@ -21,7 +21,7 @@ import net.minecraft.world.item.ItemStack;
 public class RadarFilterScreen extends AbstractSimiScreen {
 
     private static final String KEY = "detectBools";
-    private static final int COUNT = 8; // set to number of booleans you use
+    private static final int COUNT = 7; // set to number of booleans you use
 
     boolean player;
     boolean vs2;

@@ -811,15 +811,13 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
         if (inner == null) return TargetingConfig.DEFAULT;
 
         boolean player      = inner.contains("player", Tag.TAG_BYTE) ? inner.getBoolean("player") : TargetingConfig.DEFAULT.player();
-
         boolean contraption = inner.contains("contraption", Tag.TAG_BYTE) ? inner.getBoolean("contraption") : TargetingConfig.DEFAULT.contraption();
         boolean mob         = inner.contains("mob", Tag.TAG_BYTE) ? inner.getBoolean("mob") : TargetingConfig.DEFAULT.mob();
         boolean animal      = inner.contains("animal", Tag.TAG_BYTE) ? inner.getBoolean("animal") : TargetingConfig.DEFAULT.animal();
         boolean projectile  = inner.contains("projectile", Tag.TAG_BYTE) ? inner.getBoolean("projectile") : TargetingConfig.DEFAULT.projectile();
         boolean autoTarget  = inner.contains("autoTarget", Tag.TAG_BYTE) ? inner.getBoolean("autoTarget") : TargetingConfig.DEFAULT.autoTarget();
-        boolean artillery   = inner.contains("artillery", Tag.TAG_BYTE) ? inner.getBoolean("artillery") : TargetingConfig.DEFAULT.artillery();
         boolean los         = inner.contains("lineSight", Tag.TAG_BYTE) ? inner.getBoolean("lineSight") : TargetingConfig.DEFAULT.lineOfSight();
-        return new TargetingConfig(player, contraption, mob, animal, projectile, autoTarget, true, los,artillery);
+        return new TargetingConfig(player, contraption, mob, animal, projectile, autoTarget, true, los);
     }
 
     @Nullable
