@@ -288,17 +288,18 @@ public class CannonLead {
             double dz = aimPoint.z - muzzlePosAtFire.z;
             double horiz = Math.sqrt(dx * dx + dz * dz);
 
-            SimResult sim = simulateFlightTicksCBC(
+            SimResult sim = simulateFlightTicks(
                     muzzlePosAtFire,
                     shooterVelAtFire,
                     dir,
                     muzzleSpeedPerTick,
                     gravityPerTick,
                     formDrag,
-                    quadratic,
                     horiz,
-                    600
+                    600,
+                    true
             );
+
 
             int newFlightTicks = sim.ticks;
 

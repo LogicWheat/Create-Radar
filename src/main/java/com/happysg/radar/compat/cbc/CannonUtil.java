@@ -117,21 +117,41 @@ public class CannonUtil {
             return bp != null ? bp : AC_FALLBACK;
         }
 
-        AutocannonBreechBlockEntity breech = null;
+        java.util.function.Function<ItemStack, BallisticPropertiesComponent> fromCBCAmmo = (stack) -> {
+            if (stack == null || stack.isEmpty()) return AC_FALLBACK;
+            if (!(stack.getItem() instanceof AutocannonAmmoItem ammo)) return BallisticPropertiesComponent.DEFAULT;
+
+            AbstractAutocannonProjectile proj = ammo.getAutocannonProjectile(stack, level);
+            if (proj == null) return BallisticPropertiesComponent.DEFAULT;
+
+            return ((AutocannonProjectileAccessor) proj).getBallisticProperties();
+        };
+
         for (BlockEntity be : cannon.presentBlockEntities.values()) {
-            if (be instanceof AutocannonBreechBlockEntity b) { breech = b; break; }
+            if (be instanceof AutocannonBreechBlockEntity b) {
+                ItemStack round = b.createItemHandler().getStackInSlot(0);
+                return fromCBCAmmo.apply(round);
+            }
         }
-        if (breech == null) return AC_FALLBACK;
 
-        ItemStack round = breech.createItemHandler().getStackInSlot(0);
-        if (round == null || round.isEmpty()) return AC_FALLBACK;
+        if (Mods.CBCMODERNWARFARE.isLoaded()) {
+            for (BlockEntity be : cannon.presentBlockEntities.values()) {
+                if (be instanceof RotarycannonBreechBlockEntity rb) {
+                    ItemStack round = rb.createItemHandler().getStackInSlot(0);
+                    return fromCBCAmmo.apply(round);
+                }
+            }
 
-        if (!(round.getItem() instanceof AutocannonAmmoItem ammo)) return BallisticPropertiesComponent.DEFAULT;
+            for (BlockEntity be : cannon.presentBlockEntities.values()) {
+                if (be instanceof MediumcannonBreechBlockEntity mb) {
+                    ItemStack round = mb.getInputBuffer();
+                    return fromCBCAmmo.apply(round);
+                }
+            }
 
-        AbstractAutocannonProjectile proj = ammo.getAutocannonProjectile(round, level);
-        if (proj == null) return BallisticPropertiesComponent.DEFAULT;
+        }
 
-        return ((AutocannonProjectileAccessor) proj).getBallisticProperties();
+        return AC_FALLBACK;
     }
 
     public static BallisticPropertiesComponent getBallistics(AbstractMountedCannonContraption cannon, ServerLevel level) {
