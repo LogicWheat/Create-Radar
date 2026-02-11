@@ -21,6 +21,7 @@ public enum Mods {
     CBCMODERNWARFARE,
     CBC_AT,
     CREATEBIGCANNONS,
+    CREATEENERGYCANNONS,
     SHUPAPIUM;
     private final String id;
 

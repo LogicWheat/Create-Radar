@@ -969,9 +969,10 @@ public class WeaponFiringControl {
         boolean auto = targetingConfig.autoFire();
         boolean yawPitchOk = hasCorrectYawPitch();
         boolean safeOk = !passesSafeZone();
+        boolean cannonReady = CannonUtil.isCannonReadyToFire(cannonMount);
 
         if (level.getGameTime() % 20 == 0) {
-            LOGGER.debug("WFC FIREGATES: auto={} lead={} yawPitchOk={} safeOk={} firingBE={} target={} aim={} offset={} stable={}/{}", auto, hasLeadSolution, yawPitchOk, safeOk, fireController != null, target, offsetAim, offset, aimStableTicks, AIM_STABLE_REQUIRED);
+            LOGGER.debug("WFC FIREGATES: auto={} lead={} yawPitchOk={} safeOk={} cannonReady={} firingBE={} target={} aim={} offset={} stable={}/{}", auto, hasLeadSolution, yawPitchOk, safeOk, cannonReady, fireController != null, target, offsetAim, offset, aimStableTicks, AIM_STABLE_REQUIRED);
             if (!yawPitchOk) {
                 LOGGER.debug("WFC AIMCHK: yawCtrl={} pitchCtrl={} atYaw={} atPitch={} targYaw={} targPitch={}", yawController != null ? yawController.getBlockPos() : null, pitchController != null ? pitchController.getBlockPos() : null, yawController != null && yawController.atTargetYaw(), pitchController != null && pitchController.atTargetPitch(), yawController != null ? yawController.getTargetAngle() : null, pitchController != null ? pitchController.getTargetAngle() : null);
             }
@@ -982,7 +983,8 @@ public class WeaponFiringControl {
                 targetingConfig.autoFire()
                         && hasLeadSolution
                         //&& yawPitchOk
-                        && safeOk;
+                        && safeOk
+                        && cannonReady;
                         //&& aimStableTicks == AIM_STABLE_REQUIRED;
 
         if (fireController != null) {

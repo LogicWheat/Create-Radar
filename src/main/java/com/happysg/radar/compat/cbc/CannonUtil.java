@@ -53,6 +53,7 @@ import com.dsvv.cbcat.cannon.twin_autocannon.ITwinAutocannonBlockEntity;
 import com.dsvv.cbcat.cannon.RifledBarrelBlockEntity;
 import com.dsvv.cbcat.cannon.heavy_autocannon.IHeavyAutocannonBlockEntity;
 import com.dsvv.cbcat.cannon.heavy_autocannon.contraption.MountedHeavyAutocannonContraption;
+import net.arsenalists.createenergycannons.content.cannons.magnetic.railgun.MountedEnergyCannonContraption;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -251,16 +252,22 @@ public class CannonUtil {
     }
 
     public static float getInitialVelocity(AbstractMountedCannonContraption cannon, ServerLevel level) {
-        LOGGER.debug("→ getInitialVelocity for contraption={} mods: BigCannon={}, AutoCannon={}, Rotary={}, Medium={}",
+        LOGGER.debug("→ getInitialVelocity for contraption={} mods: BigCannon={}, AutoCannon={}, Rotary={}, Medium={}, Energy={}",
                 cannon != null ? cannon.getClass().getSimpleName() : "null",
                 isBigCannon(cannon), isAutoCannon(cannon),
-                isRotaryCannon(cannon), isMediumCannon(cannon)
+                isRotaryCannon(cannon), isMediumCannon(cannon), isEnergyCannon(cannon)
         );
         if (cannon == null) return 0f;
 
         if (CBCWPFCompat.isShupapiumAutocannon(cannon)) {
             LOGGER.debug("   • Shupapium WPF muzzle speed = {}", CBCWPFCompat.resolveShupapiumMuzzleSpeed(cannon));
             return CBCWPFCompat.resolveShupapiumMuzzleSpeed(cannon);
+        }
+
+        if (isEnergyCannon(cannon)) {
+            float velocity = ((MountedEnergyCannonContraption) cannon).getMuzzleVelocity(level);
+            LOGGER.debug("   • EnergyCannon speed = {}", velocity);
+            return velocity;
         }
 
         if (isBigCannon(cannon)) {
@@ -297,9 +304,7 @@ public class CannonUtil {
         }
 
         // Only CBC autocannon contraptions have this accessor reliably
-        if (!(cannon instanceof MountedAutocannonContraption
-                || cannon instanceof MountedTwinAutocannonContraption
-                || cannon instanceof MountedHeavyAutocannonContraption)) {
+        if (!(isAutoCannon(cannon) || isTwinAutocannon(cannon) || isHeavyAutocannon(cannon))) {
             return 100;
         }
 
@@ -353,7 +358,6 @@ public class CannonUtil {
         if (isAutocannonFamily(cannon)) {
             return getAutocannonBallistics(cannon, level).gravity();
         }
-
         Map<BlockPos, BlockEntity> presentBlockEntities = cannon.presentBlockEntities;
         for (BlockEntity blockEntity : presentBlockEntities.values()) {
             if (!(blockEntity instanceof IBigCannonBlockEntity cannonBlockEntity)) continue;
@@ -433,6 +437,23 @@ public class CannonUtil {
     public static boolean isMediumCannon(AbstractMountedCannonContraption cannonContraption){
         if(!Mods.CBCMODERNWARFARE.isLoaded()) return false;
         return cannonContraption instanceof MountedMediumcannonContraption;
+    }
+
+    public static boolean isEnergyCannon(AbstractMountedCannonContraption cannonContraption){
+        if(!Mods.CREATEENERGYCANNONS.isLoaded()) return false;
+        return cannonContraption instanceof MountedEnergyCannonContraption;
+    }
+
+
+    public static boolean isCannonReadyToFire(CannonMountBlockEntity mount) {
+        if (mount == null) return false;
+
+        if (Mods.CREATEENERGYCANNONS.isLoaded() && mount instanceof net.arsenalists.createenergycannons.content.energymount.EnergyCannonMountBlockEntity energyMount) {
+            return energyMount.isReadyToFire();
+        }
+
+        // Regular cannons are always ready
+        return true;
     }
 
     private static float getAutoCannonSpeed(AbstractMountedCannonContraption cannon) {

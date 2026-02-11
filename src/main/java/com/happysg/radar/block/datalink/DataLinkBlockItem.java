@@ -48,6 +48,8 @@ import rbasamoyai.createbigcannons.cannon_control.cannon_mount.CannonMountBlockE
 import rbasamoyai.createbigcannons.cannon_control.fixed_cannon_mount.FixedCannonMountBlock;
 import rbasamoyai.createbigcannons.cannon_control.fixed_cannon_mount.FixedCannonMountBlockEntity;
 import riftyboi.cbcmodernwarfare.cannon_control.compact_mount.CompactCannonMountBlockEntity;
+import net.arsenalists.createenergycannons.content.energymount.EnergyCannonMount;
+import net.arsenalists.createenergycannons.content.energymount.EnergyCannonMountBlockEntity;
 
 import javax.annotation.Nullable;
 
@@ -95,7 +97,8 @@ public class DataLinkBlockItem extends BlockItem {
         // ==========================================
         // MODE SELECT: Mount-first (weapon group)
         // ==========================================
-        if (clickedState.getBlock() instanceof CannonMountBlock) {
+        boolean isEnergyMount = Mods.CREATEENERGYCANNONS.isLoaded() && clickedState.getBlock() instanceof EnergyCannonMount;
+        if (clickedState.getBlock() instanceof CannonMountBlock || isEnergyMount) {
             if (!level.isClientSide) {
                 tag.put("SelectedMountPos", NbtUtils.writeBlockPos(clickedPos));
                 // Ensure other mode is cleared
@@ -431,14 +434,20 @@ public class DataLinkBlockItem extends BlockItem {
     private static boolean isCannonMountBE(@Nullable BlockEntity be) {
         if(be instanceof CannonMountBlockEntity)return true;
         if(be instanceof FixedCannonMountBlockEntity) return true;
+        if(Mods.CREATEENERGYCANNONS.isLoaded()){
+            if(be instanceof EnergyCannonMountBlockEntity) return true;
+        }
         if(Mods.CBCMODERNWARFARE.isLoaded()){
-            if(be instanceof CompactCannonMountBlockEntity) return true;// adjust if needed
+            if(be instanceof CompactCannonMountBlockEntity) return true;
         }
         return false;
     }
-    private enum MountType{NORMAL, FIXED, COMPACT}
+    private enum MountType{NORMAL, FIXED, COMPACT, ENERGY}
     private static MountType getMountType(BlockEntity be, BlockState state){
         if(be instanceof FixedCannonMountBlockEntity) return MountType.FIXED;
+        if(Mods.CREATEENERGYCANNONS.isLoaded()){
+            if(be instanceof EnergyCannonMountBlockEntity) return MountType.ENERGY;
+        }
         if(be instanceof CannonMountBlockEntity) return MountType.NORMAL;
         if(Mods.CBCMODERNWARFARE.isLoaded()){
             if(be instanceof CompactCannonMountBlockEntity) return MountType.COMPACT;
