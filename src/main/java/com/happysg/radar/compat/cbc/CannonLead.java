@@ -1,5 +1,6 @@
 package com.happysg.radar.compat.cbc;
 
+import com.happysg.radar.compat.Mods;
 import com.happysg.radar.compat.vs2.PhysicsHandler;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.BlockPos;
@@ -213,7 +214,7 @@ public class CannonLead {
                     .min(Comparator.comparingDouble(Math::abs))
                     .orElse(pitches.get(0));
 
-            Vec3 originNow = PhysicsHandler.getWorldVec(level, mount.getBlockPos().above(2).getCenter());
+            Vec3 originNow = PhysicsHandler.getWorldVec(level, mount.getControllerBlockPos().above(2).getCenter());
             Vec3 to = aimPoint.subtract(originNow);
             double yawRad = Math.atan2(to.z, to.x);
 
@@ -227,7 +228,7 @@ public class CannonLead {
         double muzzleSpeedPerTick = CannonUtil.getInitialVelocity(cannon, level);
         if (muzzleSpeedPerTick <= 0.0) return null;
 
-        Vec3 originNow = PhysicsHandler.getWorldVec(level, mount.getBlockPos().above(2).getCenter());
+        Vec3 originNow = PhysicsHandler.getWorldVec(level, mount.getControllerBlockPos().above(2).getCenter());
         int barrelLength = CannonUtil.getBarrelLength(cannon);
 
         BallisticPropertiesComponent bp = CannonUtil.getBallistics(cannon, level);
