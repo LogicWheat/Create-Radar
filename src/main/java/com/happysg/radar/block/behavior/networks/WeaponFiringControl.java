@@ -8,13 +8,11 @@ import com.happysg.radar.block.radar.track.RadarTrack;
 import com.happysg.radar.block.radar.track.RadarTrackUtil;
 import com.happysg.radar.block.radar.track.TrackCategory;
 import com.happysg.radar.compat.Mods;
-import com.happysg.radar.compat.cbc.AccelerationTracker;
-import com.happysg.radar.compat.cbc.CannonLead;
-import com.happysg.radar.compat.cbc.VelocityTracker;
+import com.happysg.radar.compat.cbc.*;
+import com.happysg.radar.compat.vs2.PhysicsHandler;
 import com.happysg.radar.compat.vs2.VS2ShipVelocityTracker;
 import com.happysg.radar.compat.vs2.VS2Utils;
 import com.happysg.radar.config.RadarConfig;
-import com.happysg.radar.compat.cbc.CBCMuzzleUtil;
 import com.mojang.logging.LogUtils;
 import net.createmod.catnip.math.VecHelper;
 import net.minecraft.core.BlockPos;
@@ -926,6 +924,7 @@ public class WeaponFiringControl {
                     RadarConfig.server().leadFiringDelay.get());
         }
 
+
         boolean hasLeadSolution = (lead != null && lead.aimPoint != null);
         Vec3 offsetAim = hasLeadSolution ? lead.aimPoint : solvePos;
         lastAimPoint = offsetAim;
@@ -938,17 +937,32 @@ public class WeaponFiringControl {
             aimStableTicks++;
         }
 
-        // drive controllers using offsetAim
-        if (this.pitchController != null) {
-            //LOGGER.warn("ptfc");
-            this.pitchController.setTarget(offsetAim);
+        Double desiredPitch = null;
+        Double desiredYaw = null;
+
+        if (Mods.VALKYRIENSKIES.isLoaded() && PhysicsHandler.isBlockInShipyard(level, cannonMount.getBlockPos())) {
+            List<List<Double>> angles = VS2CannonTargeting.calculatePitchAndYawVS2(cannonMount, offsetAim, serverLevel);
+            if (angles != null && !angles.isEmpty() && !angles.get(0).isEmpty()) {
+                desiredPitch = angles.get(0).get(0);
+                desiredYaw   = angles.get(0).get(1);
+            }
+        } else {
+            Vec3 origin = getCannonRayStart();
+
+            double dx = offsetAim.x - origin.x;
+            double dz = offsetAim.z - origin.z;
+            double yawDeg = Math.toDegrees(Math.atan2(dz, dx)) + 90.0;
+            desiredYaw = yawDeg + 180.0;
+
+            List<Double> pitchRoots = CannonTargeting.calculatePitch(cannonMount, origin, offsetAim, serverLevel);
+            if (pitchRoots != null && !pitchRoots.isEmpty()) desiredPitch = pitchRoots.get(0);
         }
 
-        if (view != null && view.yawPos() != null) {
-            BlockEntity be = level.getBlockEntity(view.yawPos());
-            if (be instanceof AutoYawControllerBlockEntity yawCtrl) {
-                yawCtrl.setTarget(offsetAim);
-            }
+        if (desiredPitch != null && pitchController != null) {
+            pitchController.setTargetAngle(desiredPitch.floatValue());
+        }
+        if (desiredYaw != null && yawController != null) {
+            yawController.setTargetAngle(desiredYaw.floatValue());
         }
 
         // Debug
@@ -967,10 +981,9 @@ public class WeaponFiringControl {
         boolean shouldFire =
                 targetingConfig.autoFire()
                         && hasLeadSolution
-                        //&& hasCorrectYawPitch()
-                        && !passesSafeZone()
-                        //&& aimStableTicks == AIM_STABLE_REQUIRED
-                        && hasPreFireClearShot(lastAimPoint);
+                        //&& yawPitchOk
+                        && safeOk;
+                        //&& aimStableTicks == AIM_STABLE_REQUIRED;
 
         if (fireController != null) {
             if (shouldFire) tryFireCannon();

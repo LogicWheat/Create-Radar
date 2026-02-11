@@ -97,11 +97,11 @@ public class CannonUtil {
             if (mwMount.getBlockState().hasProperty(HORIZONTAL_FACING)) {
                 Direction dir = mwMount.getBlockState().getValue(HORIZONTAL_FACING);
                 return switch (dir) {
-                    case EAST  -> new Vec3(0, 0,  1);
+                    case EAST -> new Vec3(0, 0,  1);
                     case SOUTH -> new Vec3(-1,0,  0);
-                    case WEST  -> new Vec3(0, 0, -1);
+                    case WEST -> new Vec3(0, 0, -1);
                     case NORTH -> new Vec3(1, 0,  0);
-                    default    -> Vec3.ZERO;
+                    default -> Vec3.ZERO;
                 };
             }
         }
