@@ -296,7 +296,7 @@ public class CannonLead {
                     gravityPerTick,
                     formDrag,
                     horiz,
-                    600,
+                    computeMaxSimTicks(horiz, muzzleSpeedPerTick),
                     true
             );
 
