@@ -317,6 +317,23 @@ public class CannonLead {
         return new LeadSolution(aimPoint, chosenPitchDeg, chosenYawRad, flightTicks);
     }
 
+    private static int computeMaxSimTicks(double targetHorizontalDist, double muzzleSpeedPerTick) {
+
+    final double MAX_SIM_DISTANCE_BLOCKS = 4096.0;
+    final int HARD_MAX_TICKS = 8000;
+
+    double speed = Math.max(1.0e-6, muzzleSpeedPerTick);
+
+    int ticksToTarget = (int) Math.ceil(targetHorizontalDist / speed);
+    int ticksToBudget = (int) Math.ceil(MAX_SIM_DISTANCE_BLOCKS / speed);
+    int ticks = Math.max(ticksToTarget + 40, ticksToBudget);
+
+    if (ticks < 60) ticks = 60;
+    if (ticks > HARD_MAX_TICKS) ticks = HARD_MAX_TICKS;
+
+    return ticks;
+}
+
 
     public static void logLeadByBlocks(Vec3 targetPosNow, Vec3 aimPoint, Vec3 targetVelPerTick) {
         if (targetPosNow == null || aimPoint == null) return;
