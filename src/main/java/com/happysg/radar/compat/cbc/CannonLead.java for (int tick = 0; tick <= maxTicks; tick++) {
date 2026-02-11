@@ -109,6 +109,10 @@ public class CannonLead {
                 return new SimResult(tick, pos, vel);
             }
 
+            if (vel.lengthSqr() <= 1.0e-4) {
+               return new SimResult(tick, pos, vel);
+            }
+
             // i’m applying gravity per tick
             vel = vel.add(0.0, gravityPerTick, 0.0);
 
