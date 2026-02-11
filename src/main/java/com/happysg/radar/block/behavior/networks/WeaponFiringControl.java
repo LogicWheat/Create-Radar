@@ -79,6 +79,8 @@ public class WeaponFiringControl {
     private static final int LOS_SELECTION_TTL_TICKS = 10;
     private static final int LOS_PREFIRE_TTL_TICKS = 1;
 
+    double maxSimDistanceBlocks = 4096.0;
+
     private static final class LosCache {
         boolean ok;
         long tick;
@@ -919,11 +921,37 @@ public class WeaponFiringControl {
             lead = CannonLead.solveLeadPerTickWithAcceleration(
                     cannonMount, cannonContraption, serverLevel,
                     shooterVel, shooterAccel,
-                    solvePos, // use solvePos, not feet
+                    solvePos,
                     targetVel, targetAccel,
-                    RadarConfig.server().leadFiringDelay.get());
+                    RadarConfig.server().leadFiringDelay.get(),
+                    maxSimDistanceBlocks);
         }
 
+        WeaponNetworkData wnd = WeaponNetworkData.get(serverLevel);
+        WeaponNetworkData.Group grp = (wnd != null && pitchController != null) ? wnd.getGroupForController(serverLevel.dimension(), pitchController.getBlockPos()) : null;
+
+        if (grp != null && !grp.dataLinks.isEmpty()) {
+            Vec3 cannonOrigin = getCannonRayStart();
+            double best = 0.0;
+
+            for (BlockPos dlPos : grp.dataLinks) {
+                BlockEntity be = serverLevel.getBlockEntity(dlPos);
+                if (!(be instanceof com.happysg.radar.block.datalink.DataLinkBlockEntity dl)) continue;
+
+                BlockPos srcPos = dl.getSourcePosition();
+                BlockEntity srcBe = serverLevel.getBlockEntity(srcPos);
+
+                if (srcBe instanceof com.happysg.radar.block.radar.behavior.IRadar radar) {
+                    Vec3 radarWorldPos = PhysicsHandler.getWorldVec(srcBe); // VS2-safe world position
+                    double d = cannonOrigin.distanceTo(radarWorldPos);
+                    double cap = radar.getRange() + d; // relative-to-cannon max distance
+
+                    if (cap > best) best = cap;
+                }
+            }
+
+            if (best > 0.0) maxSimDistanceBlocks = best;
+        }
 
         boolean hasLeadSolution = (lead != null && lead.aimPoint != null);
         Vec3 offsetAim = hasLeadSolution ? lead.aimPoint : solvePos;

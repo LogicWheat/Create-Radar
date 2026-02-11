@@ -206,7 +206,8 @@ public class CannonLead {
             Vec3 targetVelPerTick,
             Vec3 targetAccelPerTick2,
 
-            int fireDelayTicks
+            int fireDelayTicks,
+            double maxSimDistanceBlocks
     ) {
         if (mount == null || cannon == null || level == null) return null;
         if (targetPosNow == null || targetVelPerTick == null || targetAccelPerTick2 == null) return null;
@@ -215,21 +216,9 @@ public class CannonLead {
         boolean shooterMoving = shooterVelPerTick.lengthSqr() >= VEL_EPS_SQR;
 
         if (!targetMoving) {
-            Vec3 aimPoint = targetPosNow;
-
-            List<Double> pitches = CannonTargeting.calculatePitch(mount, aimPoint, level);
-            if (pitches == null || pitches.isEmpty()) return null;
-
-            double pitchDeg = pitches.stream()
-                    .min(Comparator.comparingDouble(Math::abs))
-                    .orElse(pitches.get(0));
-
-            Vec3 originNow = PhysicsHandler.getWorldVec(level, mount.getControllerBlockPos().above(2).getCenter());
-            Vec3 to = aimPoint.subtract(originNow);
-            double yawRad = Math.atan2(to.z, to.x);
-
-            return new LeadSolution(aimPoint, pitchDeg, yawRad, 0);
+            return new LeadSolution(targetPosNow, 0.0, 0.0, 0);
         }
+
         if (!shooterMoving) {
             shooterVelPerTick = Vec3.ZERO;
             shooterAccelPerTick2 = Vec3.ZERO;
@@ -278,17 +267,14 @@ public class CannonLead {
             Vec3 toPred = aimPoint.subtract(shooterPosAtFire);
             chosenYawRad = Math.atan2(toPred.z, toPred.x);
 
-            // i’m using your pitch solver to find valid pitch angles for this predicted point
-            List<Double> pitches = CannonTargeting.calculatePitch(mount, aimPoint, level);
-            if (pitches == null || pitches.isEmpty()) return null;
+// cheap pitch guess: point at the intercept (no ballistic solve here)
+            double horizToPred = Math.sqrt(toPred.x * toPred.x + toPred.z * toPred.z);
+            double pitchRad = Math.atan2(toPred.y, Math.max(1.0e-6, horizToPred));
 
-            // i’m taking the smallest-absolute pitch as the "direct fire" solution
-            chosenPitchDeg = pitches.stream()
-                    .min(Comparator.comparingDouble(Math::abs))
-                    .orElse(pitches.get(0));
-
-            double pitchRad = Math.toRadians(chosenPitchDeg);
             Vec3 dir = directionFromYawPitch(chosenYawRad, pitchRad);
+
+// optional: keep pitchDeg populated for debugging only
+            chosenPitchDeg = Math.toDegrees(pitchRad);
 
             // i’m offsetting muzzle forward along the barrel direction
             Vec3 muzzlePosAtFire = shooterPosAtFire.add(dir.scale(barrelLength));
@@ -306,7 +292,7 @@ public class CannonLead {
                     gravityPerTick,
                     formDrag,
                     horiz,
-                    computeMaxSimTicks(horiz, muzzleSpeedPerTick),
+                    computeMaxSimTicks(horiz, muzzleSpeedPerTick, maxSimDistanceBlocks),
                     true
             );
 
@@ -327,22 +313,22 @@ public class CannonLead {
         return new LeadSolution(aimPoint, chosenPitchDeg, chosenYawRad, flightTicks);
     }
 
-    private static int computeMaxSimTicks(double targetHorizontalDist, double muzzleSpeedPerTick) {
+    private static int computeMaxSimTicks(double targetHorizontalDist, double muzzleSpeedPerTick, double maxSimDistanceBlocks) {
+        final int HARD_MAX_TICKS = 8000;
 
-    final double MAX_SIM_DISTANCE_BLOCKS = 4096.0;
-    final int HARD_MAX_TICKS = 8000;
+        double speed = Math.max(1.0e-6, muzzleSpeedPerTick);
 
-    double speed = Math.max(1.0e-6, muzzleSpeedPerTick);
+        // cap sim distance by radar-derived max distance (relative to cannon)
+        double cappedDist = Math.min(targetHorizontalDist, Math.max(0.0, maxSimDistanceBlocks));
 
-    int ticksToTarget = (int) Math.ceil(targetHorizontalDist / speed);
-    int ticksToBudget = (int) Math.ceil(MAX_SIM_DISTANCE_BLOCKS / speed);
-    int ticks = Math.max(ticksToTarget + 40, ticksToBudget);
+        int ticksToTarget = (int) Math.ceil(cappedDist / speed);
 
-    if (ticks < 60) ticks = 60;
-    if (ticks > HARD_MAX_TICKS) ticks = HARD_MAX_TICKS;
+        int ticks = ticksToTarget + 40;
 
-    return ticks;
-}
+        if (ticks < 60) ticks = 60;
+        if (ticks > HARD_MAX_TICKS) ticks = HARD_MAX_TICKS;
+        return ticks;
+    }
 
 
     public static void logLeadByBlocks(Vec3 targetPosNow, Vec3 aimPoint, Vec3 targetVelPerTick) {
