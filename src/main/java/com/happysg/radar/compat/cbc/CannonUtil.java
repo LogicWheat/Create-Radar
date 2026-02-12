@@ -444,6 +444,11 @@ public class CannonUtil {
         return cannonContraption instanceof MountedEnergyCannonContraption;
     }
 
+    public static boolean isLaserCannon(AbstractMountedCannonContraption cannonContraption){
+        if(!Mods.CREATEENERGYCANNONS.isLoaded()) return false;
+        return cannonContraption != null && cannonContraption.getClass().getSimpleName().equals("MountedLaserCannonContraption");
+    }
+
 
     public static boolean isCannonReadyToFire(CannonMountBlockEntity mount) {
         if (mount == null) return false;

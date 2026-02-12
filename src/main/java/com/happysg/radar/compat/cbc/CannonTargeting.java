@@ -41,6 +41,13 @@ public class CannonTargeting {
         PitchOrientedContraptionEntity contraption = mount.getContraption();
         if (contraption == null || !(contraption.getContraption() instanceof AbstractMountedCannonContraption cannon)) return null;
 
+        if (CannonUtil.isLaserCannon(cannon)) {
+            double dX = Math.hypot(targetPos.x - originPos.x, targetPos.z - originPos.z);
+            double dY = targetPos.y - originPos.y;
+            double pitch = Math.toDegrees(Math.atan2(dY, dX));
+            return List.of(pitch);
+        }
+
         float speed = CannonUtil.getInitialVelocity(cannon, level);
         double drag = CannonUtil.getProjectileDrag(cannon, level);
         double gravity = CannonUtil.getProjectileGravity(cannon, level);

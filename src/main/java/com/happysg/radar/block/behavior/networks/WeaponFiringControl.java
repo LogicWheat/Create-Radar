@@ -917,7 +917,7 @@ public class WeaponFiringControl {
         }
 
         CannonLead.LeadSolution lead = null;
-        if (dist > noLeadDist) {
+        if (!CannonUtil.isLaserCannon(cannonContraption) && dist > noLeadDist) {
             lead = CannonLead.solveLeadPerTickWithAcceleration(
                     cannonMount, cannonContraption, serverLevel,
                     shooterVel, shooterAccel,
@@ -954,6 +954,8 @@ public class WeaponFiringControl {
         }
 
         boolean hasLeadSolution = (lead != null && lead.aimPoint != null);
+        // Laser cannons don't need lead solutions (instantaneous beam)
+        boolean canFireWithoutLead = CannonUtil.isLaserCannon(cannonContraption);
         Vec3 offsetAim = hasLeadSolution ? lead.aimPoint : solvePos;
         lastAimPoint = offsetAim;
 
@@ -1000,7 +1002,7 @@ public class WeaponFiringControl {
         boolean cannonReady = CannonUtil.isCannonReadyToFire(cannonMount);
 
         if (level.getGameTime() % 20 == 0) {
-            LOGGER.debug("WFC FIREGATES: auto={} lead={} yawPitchOk={} safeOk={} cannonReady={} firingBE={} target={} aim={} offset={} stable={}/{}", auto, hasLeadSolution, yawPitchOk, safeOk, cannonReady, fireController != null, target, offsetAim, offset, aimStableTicks, AIM_STABLE_REQUIRED);
+            LOGGER.debug("WFC FIREGATES: auto={} lead={} laserNoLead={} yawPitchOk={} safeOk={} cannonReady={} firingBE={} target={} aim={} offset={} stable={}/{}", auto, hasLeadSolution, canFireWithoutLead, yawPitchOk, safeOk, cannonReady, fireController != null, target, offsetAim, offset, aimStableTicks, AIM_STABLE_REQUIRED);
             if (!yawPitchOk) {
                 LOGGER.debug("WFC AIMCHK: yawCtrl={} pitchCtrl={} atYaw={} atPitch={} targYaw={} targPitch={}", yawController != null ? yawController.getBlockPos() : null, pitchController != null ? pitchController.getBlockPos() : null, yawController != null && yawController.atTargetYaw(), pitchController != null && pitchController.atTargetPitch(), yawController != null ? yawController.getTargetAngle() : null, pitchController != null ? pitchController.getTargetAngle() : null);
             }
@@ -1009,7 +1011,7 @@ public class WeaponFiringControl {
 
         boolean shouldFire =
                 targetingConfig.autoFire()
-                        && hasLeadSolution
+                        && (hasLeadSolution || canFireWithoutLead)
                         //&& yawPitchOk
                         && safeOk
                         && cannonReady;
