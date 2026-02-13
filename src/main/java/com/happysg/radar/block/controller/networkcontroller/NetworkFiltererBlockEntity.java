@@ -83,6 +83,10 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
     private long rangeCacheUntilTick = -1;
     private double rangeCacheBlocks = 0.0;
 
+    private @Nullable String lastPushedTrackId = null;
+    private int lastPushedCfgHash = 0;
+    private long lastPushedSafeZonesHash = 0;
+
     public static void tick(Level level, BlockPos pos, BlockState state, NetworkFiltererBlockEntity be) {
         if (!(level instanceof ServerLevel sl)) return;
         if (level.isClientSide) return;
@@ -92,14 +96,11 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
 
         String selectedId = data.getSelectedTargetId(group);
 
-        if (Mods.VALKYRIENSKIES.isLoaded() && selectedId != null) {
+        if (Mods.VALKYRIENSKIES.isLoaded() && selectedId != null && (sl.getGameTime() % 10 == 0)) {
             long shipId = parseShipIdOrNeg(selectedId);
             if (shipId != -1L) {
-                // i only do VS lookups after i know it's a valid numeric ship id
                 Ship ship = VSGameUtilsKt.getAllShips(level).getById(shipId);
-                if (ship != null) {
-                    RadarContactRegistry.markLocked(sl, shipId, 10);
-                }
+                if (ship != null) RadarContactRegistry.markLocked(sl, shipId, 10);
             }
         }
 
@@ -233,14 +234,25 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
             return;
         }
 
-        if (selectedWasAuto && !anyCannonCanEngage(sl, selected, false)) {
-            dropOrReselectAuto(sl, data, group);
-            return;
-        }
+        TargetingConfig cfg2 = targeting != null ? targeting : TargetingConfig.DEFAULT;
+
+        String newId = selected == null ? null : selected.getId();
+        int newCfgHash = cfgHash(cfg2);
+        long newZonesHash = safeZonesHash(safeZones);
+
+        boolean changed =
+                !Objects.equals(lastPushedTrackId, newId) ||
+                        lastPushedCfgHash != newCfgHash ||
+                        lastPushedSafeZonesHash != newZonesHash;
 
         activeTrackCache = selected;
-        LOGGER.debug("push");
-        pushToEndpoints(selected);
+
+        if (changed) {
+            lastPushedTrackId = newId;
+            lastPushedCfgHash = newCfgHash;
+            lastPushedSafeZonesHash = newZonesHash;
+            pushToEndpoints(selected);
+        }
     }
 
 
@@ -286,7 +298,6 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
             if (track != null && track.trackCategory() == TrackCategory.VS2) {
                 long shipId = parseShipIdOrNeg(track.getId());
                 if (shipId != -1L) {
-                    LOGGER.debug("locking");
                     RadarContactRegistry.markLocked(sl, shipId, 10);
                 }
             }
@@ -489,7 +500,6 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
             return List.of();
         NetworkData data = NetworkData.get(serverLevel);
         NetworkData.Group group = data.getGroup(serverLevel.dimension(), worldPosition);
-        LOGGER.debug("ping1");
         if (group == null)
             return List.of();
         Set<BlockPos> pos = data.getWeaponEndpoints(group);
@@ -499,7 +509,6 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
                 entities.add(pitch);
             }
         }
-        LOGGER.debug(""+entities);
         return entities;
     }
 
@@ -866,5 +875,30 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
             selectedWasAuto = false;
             applySelectedTarget(sl, data, group, null, false);
         }
+    }
+
+    private static int cfgHash(TargetingConfig cfg) {
+        return Objects.hash(
+                cfg.autoTarget(),
+                cfg.lineOfSight(),
+                cfg.player(),
+                cfg.mob(),
+                cfg.animal(),
+                cfg.projectile(),
+                cfg.contraption()
+        );
+    }
+
+    private static long safeZonesHash(List<AABB> zones) {
+        long h = 1469598103934665603L;
+        for (AABB a : zones) {
+            h ^= Double.doubleToLongBits(a.minX); h *= 1099511628211L;
+            h ^= Double.doubleToLongBits(a.minY); h *= 1099511628211L;
+            h ^= Double.doubleToLongBits(a.minZ); h *= 1099511628211L;
+            h ^= Double.doubleToLongBits(a.maxX); h *= 1099511628211L;
+            h ^= Double.doubleToLongBits(a.maxY); h *= 1099511628211L;
+            h ^= Double.doubleToLongBits(a.maxZ); h *= 1099511628211L;
+        }
+        return h;
     }
 }
