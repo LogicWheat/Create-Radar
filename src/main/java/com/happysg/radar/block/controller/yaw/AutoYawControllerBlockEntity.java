@@ -34,7 +34,7 @@ import java.util.List;
 
 public class AutoYawControllerBlockEntity extends KineticBlockEntity{
 
-    private static final double TOLERANCE_DEG = 0.1;
+    private static final double TOLERANCE_DEG = 0.15;
 
     private double targetAngle; // degrees [0,360)
 
@@ -52,7 +52,7 @@ public class AutoYawControllerBlockEntity extends KineticBlockEntity{
     private BlockPos cachedAdjacentPos = BlockPos.ZERO;
     private final double MIN_MOVE_PER_TICK = 0.02;
     private static final double MAX_MOVE_PER_TICK = RadarConfig.server().controllerPhysbearingMaxSpeed.get();
-    private static final double SNAP_DISTANCE = 32.0;
+    private static final double SNAP_DISTANCE = 37.0;
     private static final double DEADBAND_DEG = .5;
     private BlockPos lastKnownPos = BlockPos.ZERO;
     private double yawZeroOffsetDeg = 0.0;
@@ -176,31 +176,43 @@ public class AutoYawControllerBlockEntity extends KineticBlockEntity{
     }
 
     /** Works for either mount type */
-    public boolean atTargetYaw() {
+    public boolean atTargetYaw(boolean lag) {
         if (level == null) return false;
 
         Mount mount = resolveMount();
         if (mount == null) return false;
 
+        // i increase tolerance slightly if we're not lag-compensating
+        double effectiveTolerance = TOLERANCE_DEG;
+        if (!lag) {
+            effectiveTolerance += 0.15;
+        }
+
         if (mount.kind == MountKind.CBC && Mods.CREATEBIGCANNONS.isLoaded()) {
             PitchOrientedContraptionEntity contraption = mount.cbc.getContraption();
             if (contraption == null) return false;
 
-            double desired = hasPrevTarget ? wrap360(clampYawToLimits(prevTargetAngle)) : wrap360(clampYawToLimits(targetAngle));
+            double desired = hasPrevTarget
+                    ? wrap360(clampYawToLimits(prevTargetAngle))
+                    : wrap360(clampYawToLimits(targetAngle));
 
+            // i prefer what we actually commanded (contraption.yaw can lag behind)
+            double current = hasLastCbcYawWritten
+                    ? wrap360(lastCbcYawWritten)
+                    : wrap360(contraption.yaw);
 
-            // Prefer what we actually commanded (contraption.yaw can lag behind)
-            double current = hasLastCbcYawWritten ? wrap360(lastCbcYawWritten) : wrap360(contraption.yaw);
-
-            return Math.abs(shortestDelta(current, desired)) < TOLERANCE_DEG;
+            return Math.abs(shortestDelta(current, desired)) < effectiveTolerance;
         }
 
         if (mount.kind == MountKind.PHYS && Mods.VS_CLOCKWORK.isLoaded()) {
             Double actualRad = mount.phys.getActualAngle();
             if (actualRad == null) return false;
+
             double currentDeg = wrap360(Math.toDegrees(actualRad));
             double desiredDeg = wrap360(360.0 - targetAngle);
-            return Math.abs(shortestDelta(currentDeg, desiredDeg)) < Math.max(TOLERANCE_DEG, DEADBAND_DEG);
+
+            return Math.abs(shortestDelta(currentDeg, desiredDeg))
+                    < Math.max(effectiveTolerance, DEADBAND_DEG);
         }
 
         return false;

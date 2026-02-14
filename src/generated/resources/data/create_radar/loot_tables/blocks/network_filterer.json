@@ -11,11 +11,11 @@
       "entries": [
         {
           "type": "minecraft:item",
-          "name": "create_radar:id_block"
+          "name": "create_radar:network_filterer"
         }
       ],
       "rolls": 1.0
     }
   ],
-  "random_sequence": "create_radar:blocks/id_block"
+  "random_sequence": "create_radar:blocks/network_filterer"
 }

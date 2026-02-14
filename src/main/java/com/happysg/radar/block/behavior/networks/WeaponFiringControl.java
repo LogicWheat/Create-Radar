@@ -848,7 +848,7 @@ public class WeaponFiringControl {
                 return;
             }
         }
-        if (targetShip != null) {
+        if (targetShip != null && !binoMode) {
             long id;
             try {
                 id = Long.parseLong(activetrack.id());
@@ -872,6 +872,7 @@ public class WeaponFiringControl {
         Vec3 shooterAccel;
         Vec3 targetVel;
         Vec3 targetAccel;
+        boolean lag;
         if(VS2Utils.isBlockInShipyard(level,cannonMount.getBlockPos())){
             Ship mountship = VSGameUtilsKt.getShipManagingPos(level,cannonMount.getBlockPos());
             if(mountship ==null){
@@ -894,6 +895,7 @@ public class WeaponFiringControl {
             targetVel = VelocityTracker.getEstimatedVelocityPerTick(targetEntity);
             targetAccel = AccelerationTracker.getAccelerationPerTick2(targetEntity.getUUID(),targetVel);
         }else if(binoMode && binoTargetPos != null){
+
             target = binoTargetPos.getCenter();
             targetVel = Vec3.ZERO;
             targetAccel = Vec3.ZERO;
@@ -915,7 +917,14 @@ public class WeaponFiringControl {
 
             solvePos = vis;
         }
+        double maxSpeed = 0.25; // 5 m/s in blocks/tick
+        double maxSpeedSqr = maxSpeed * maxSpeed;
 
+        if (targetVel.lengthSqr() > maxSpeedSqr) {
+            lag = false; // allows lower tolerance when leading
+        }else {
+            lag = true;
+        }
         CannonLead.LeadSolution lead = null;
         if (!CannonUtil.isLaserCannon(cannonContraption) && dist > noLeadDist) {
             lead = CannonLead.solveLeadPerTickWithAcceleration(
@@ -997,22 +1006,21 @@ public class WeaponFiringControl {
 
         // Debug
         boolean auto = targetingConfig.autoFire();
-        boolean yawPitchOk = hasCorrectYawPitch();
+        boolean yawPitchOk = hasCorrectYawPitch(lag);
         boolean safeOk = !passesSafeZone();
         boolean cannonReady = CannonUtil.isCannonReadyToFire(cannonMount);
 
         if (level.getGameTime() % 20 == 0) {
             LOGGER.debug("WFC FIREGATES: auto={} lead={} laserNoLead={} yawPitchOk={} safeOk={} cannonReady={} firingBE={} target={} aim={} offset={} stable={}/{}", auto, hasLeadSolution, canFireWithoutLead, yawPitchOk, safeOk, cannonReady, fireController != null, target, offsetAim, offset, aimStableTicks, AIM_STABLE_REQUIRED);
             if (!yawPitchOk) {
-                LOGGER.debug("WFC AIMCHK: yawCtrl={} pitchCtrl={} atYaw={} atPitch={} targYaw={} targPitch={}", yawController != null ? yawController.getBlockPos() : null, pitchController != null ? pitchController.getBlockPos() : null, yawController != null && yawController.atTargetYaw(), pitchController != null && pitchController.atTargetPitch(), yawController != null ? yawController.getTargetAngle() : null, pitchController != null ? pitchController.getTargetAngle() : null);
+                LOGGER.debug("WFC AIMCHK: yawCtrl={} pitchCtrl={} atYaw={} atPitch={} targYaw={} targPitch={}", yawController != null ? yawController.getBlockPos() : null, pitchController != null ? pitchController.getBlockPos() : null, yawController != null && yawController.atTargetYaw(lag), pitchController != null && pitchController.atTargetPitch(lag), yawController != null ? yawController.getTargetAngle() : null, pitchController != null ? pitchController.getTargetAngle() : null);
             }
         }
-        // Debug End
 
         boolean shouldFire =
                 targetingConfig.autoFire()
                         && (hasLeadSolution || canFireWithoutLead)
-                        //&& yawPitchOk
+                        && yawPitchOk
                         && safeOk
                         && cannonReady;
                         //&& aimStableTicks == AIM_STABLE_REQUIRED;
@@ -1112,13 +1120,13 @@ public class WeaponFiringControl {
         return false;
     }
 
-    private boolean hasCorrectYawPitch() {
+    private boolean hasCorrectYawPitch(boolean lag) {
         if(yawController == null && pitchController == null)return false;
         boolean yaw =true;
         if(yawController !=null) {
-            yaw = yawController.atTargetYaw();
+            yaw = yawController.atTargetYaw(lag);
         }
-        boolean pitch = pitchController.atTargetPitch();
+        boolean pitch = pitchController.atTargetPitch(lag);
 
         return yaw && pitch;
     }

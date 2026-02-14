@@ -44,10 +44,10 @@ import java.util.UUID;
 
 public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static final double CBC_TOLERANCE = 0.10;
+    private static final double CBC_TOLERANCE = 0.1;
 
     // PhysBearing tolerance in degrees
-    private static final double PHYS_TOLERANCE_DEG = 0.10;
+    private static final double PHYS_TOLERANCE_DEG = 0.1;
     private static final double DEADBAND_DEG = 0.25;
     // CBC (normal mount) pitch limits: [-90, 90] by default
     private double minAngleDeg = -90.0;
@@ -69,12 +69,12 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
     // artillery selection (CBC)
     private boolean artillery = false;
 
-    private RadarTrack track;
+    public RadarTrack track;
 
     private BlockPos lastKnownPos = BlockPos.ZERO;
     public WeaponFiringControl firingControl;
     public AutoYawControllerBlockEntity autoyaw;
-    private static final double SNAP_DISTANCE = 32.0;
+    private static final double SNAP_DISTANCE = 37.0;
     private static final double MIN_MOVE_PER_TICK = 0.02;
     private static final double MAX_MOVE_PER_TICK = 2.0;
 
@@ -317,13 +317,21 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
     }
 
     /** CBC path: checks contraption.pitch vs targetAngle (both in CBC units). */
-    public boolean atTargetPitch() {
+    public boolean atTargetPitch(boolean lag) {
         if (level == null)
             return false;
 
         Mount mount = resolveMount();
         if (mount == null)
             return false;
+
+        // i increase tolerance slightly if we're not lag-compensating
+        double cbcTol = CBC_TOLERANCE;
+        double physTol = PHYS_TOLERANCE_DEG;
+        if (!lag) {
+            cbcTol += 0.15;
+            physTol += 0.15;
+        }
 
         if (mount.kind == MountKind.CBC && Mods.CREATEBIGCANNONS.isLoaded()) {
             PitchOrientedContraptionEntity contraption = mount.cbc.getContraption();
@@ -337,7 +345,7 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
             int invert = -cannonContraption.initialOrientation().getStepX() + cannonContraption.initialOrientation().getStepZ();
             currentPitch = currentPitch * -invert;
 
-            return Math.abs(currentPitch - targetAngle) < CBC_TOLERANCE;
+            return Math.abs(currentPitch - targetAngle) < cbcTol;
         }
 
         if (mount.kind == MountKind.PHYS && Mods.VS_CLOCKWORK.isLoaded()) {
@@ -348,7 +356,7 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
             double currentDeg = wrap360(Math.toDegrees(actualRad));
             double desiredDeg = wrap360(targetAngle);
 
-            return Math.abs(shortestDelta(currentDeg, desiredDeg)) < Math.max(PHYS_TOLERANCE_DEG, DEADBAND_DEG);
+            return Math.abs(shortestDelta(currentDeg, desiredDeg)) < Math.max(physTol, DEADBAND_DEG);
         }
 
         return false;

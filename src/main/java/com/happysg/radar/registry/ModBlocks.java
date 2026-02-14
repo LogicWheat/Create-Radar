@@ -48,8 +48,7 @@ public class ModBlocks {
                                         .build();
                             }))
                     .addLayer(() -> RenderType::cutoutMipped)
-                    .tag(BlockTags.MINEABLE_WITH_PICKAXE)
-                    .tag(BlockTags.MINEABLE_WITH_AXE)
+                    .transform(axeOrPickaxe())
                     .item()
                     .model((c, p) -> p.withExistingParent(c.getName(), CreateRadar.asResource("block/monitor/monitor_single")))
                     .build()
@@ -62,8 +61,7 @@ public class ModBlocks {
                     .properties(p -> p.mapColor(MapColor.TERRACOTTA_BROWN))
                     .properties(p -> p.noOcclusion())
                     .addLayer(() -> RenderType::translucent)
-                    .tag(BlockTags.MINEABLE_WITH_PICKAXE)
-                    .tag(BlockTags.MINEABLE_WITH_AXE)
+                    .transform(axeOrPickaxe())
                     .blockstate((c, p) -> p.directionalBlock(c.getEntry(), AssetLookup.partialBaseModel(c, p)))
                     .item(DataLinkBlockItem::new)
                     .build()
@@ -77,8 +75,7 @@ public class ModBlocks {
                     .transform(BuilderTransformers.bearing("windmill", "gearbox"))
                     .properties(p -> p.noOcclusion())
                     .blockstate((c, p) -> p.simpleBlock(c.getEntry(), AssetLookup.partialBaseModel(c, p)))
-                    .tag(BlockTags.MINEABLE_WITH_PICKAXE)
-                    .tag(BlockTags.MINEABLE_WITH_AXE)
+                    .transform(axeOrPickaxe())
                     .item()
                     .model(AssetLookup.customBlockItemModel("_", "item"))
                     .build()
@@ -90,8 +87,7 @@ public class ModBlocks {
                     .addLayer(() -> RenderType::cutout)
                     .properties(p -> p.noOcclusion())
                     .blockstate((c, p) -> p.horizontalBlock(c.getEntry(), AssetLookup.standardModel(c, p)))
-                    .tag(BlockTags.MINEABLE_WITH_PICKAXE)
-                    .tag(BlockTags.MINEABLE_WITH_AXE)
+                    .transform(axeOrPickaxe())
                     .simpleItem()
                     .register();
 
@@ -99,8 +95,7 @@ public class ModBlocks {
             REGISTRATE.block("identification_transponder", IdentificationTransponder::new)
                     .initialProperties(SharedProperties::softMetal)
                     .properties(p -> p.noOcclusion())
-                    .tag(BlockTags.MINEABLE_WITH_PICKAXE)
-                    .tag(BlockTags.MINEABLE_WITH_AXE)
+                    .transform(axeOrPickaxe())
                     .blockstate((c, p) -> p.simpleBlock(c.getEntry(), AssetLookup.standardModel(c, p)))
                     .simpleItem()
                     .register();
@@ -111,8 +106,7 @@ public class ModBlocks {
                     .initialProperties(SharedProperties::softMetal)
 //                    .transform(BlockStressDefaults.setImpact(0))
                     .properties(p -> p.noOcclusion())
-                    .tag(BlockTags.MINEABLE_WITH_PICKAXE)
-                    .tag(BlockTags.MINEABLE_WITH_AXE)
+                    .transform(axeOrPickaxe())
                     .blockstate((ctx, prov) -> prov.directionalBlock(ctx.getEntry(), prov.models()
                             .getExistingFile(ctx.getId()), 180))
                     .simpleItem()
@@ -126,8 +120,7 @@ public class ModBlocks {
 //                    .transform(BlockStressDefaults.setImpact(0))
                     .properties(p -> p.noOcclusion())
                     .addLayer(() -> RenderType::cutoutMipped)
-                    .tag(BlockTags.MINEABLE_WITH_PICKAXE)
-                    .tag(BlockTags.MINEABLE_WITH_AXE)
+                    .transform(axeOrPickaxe())
                     .blockstate((ctx, prov) -> prov.directionalBlock(ctx.getEntry(), prov.models()
                             .getExistingFile(ctx.getId()), 0))
                     .simpleItem()
@@ -140,8 +133,7 @@ public class ModBlocks {
                     .initialProperties(SharedProperties::softMetal)
 //                    .transform(BlockStressDefaults.setImpact(0))
                     .properties(p -> p.noOcclusion())
-                    .tag(BlockTags.MINEABLE_WITH_PICKAXE)
-                    .tag(BlockTags.MINEABLE_WITH_AXE)
+                    .transform(axeOrPickaxe())
                     .blockstate((ctx, prov) -> prov.directionalBlock(ctx.getEntry(), prov.models()
                             .getExistingFile(ctx.getId()), 0))
                     .simpleItem()
@@ -155,8 +147,7 @@ public class ModBlocks {
                     .properties(p -> p.noOcclusion())
                     .blockstate((ctx, prov) -> prov.directionalBlock(ctx.getEntry(), prov.models()
                             .getExistingFile(ctx.getId()), 0))
-                    .tag(BlockTags.MINEABLE_WITH_PICKAXE)
-                    .tag(BlockTags.MINEABLE_WITH_AXE)
+                    .transform(axeOrPickaxe())
                     .simpleItem()
                     .register();
 
@@ -168,8 +159,7 @@ public class ModBlocks {
 //                    .transform(BlockStressDefaults.setImpact(128))
                     .transform(BuilderTransformers.bearing("windmill", "gearbox"))
                     .properties(p -> p.noOcclusion())
-                    .tag(BlockTags.MINEABLE_WITH_PICKAXE)
-                    .tag(BlockTags.MINEABLE_WITH_AXE)
+
                     .transform(axeOrPickaxe())
                     .blockstate((c, p) -> p.directionalBlock(c.getEntry(), AssetLookup.standardModel(c, p)))
                     .simpleItem()
@@ -182,8 +172,7 @@ public class ModBlocks {
 //                    .transform(BlockStressDefaults.setImpact(128))
                     .transform(BuilderTransformers.bearing("windmill", "gearbox"))
                     .properties(p -> p.noOcclusion())
-                    .tag(BlockTags.MINEABLE_WITH_PICKAXE)
-                    .tag(BlockTags.MINEABLE_WITH_AXE)
+                    .transform(axeOrPickaxe())
                     .blockstate((c, p) -> p.horizontalBlock(c.getEntry(), AssetLookup.standardModel(c, p)))
                     .simpleItem()
                     .register();
@@ -202,16 +191,14 @@ public class ModBlocks {
                                 .modelFile(provider.models().cubeAll("on",new ResourceLocation("create_radar","block/on")))
                                 .addModel();
                     })          .properties(p -> p.noOcclusion())
-                    .tag(BlockTags.MINEABLE_WITH_PICKAXE)
-                    .tag(BlockTags.MINEABLE_WITH_AXE)
+                    .transform(axeOrPickaxe())
                     .simpleItem()
                     .register();
     public static final BlockEntry<NetworkFiltererBlock> NETWORK_FILTERER_BLOCK =
             REGISTRATE.block("network_filterer", NetworkFiltererBlock::new)
                     .initialProperties(SharedProperties::softMetal)
                     .properties(p -> p.noOcclusion())
-                    .tag(BlockTags.MINEABLE_WITH_PICKAXE)
-                    .tag(BlockTags.MINEABLE_WITH_AXE)
+                    .transform(axeOrPickaxe())
                     .blockstate((ctx, prov) -> prov.directionalBlock(ctx.getEntry(),
                             prov.models().getExistingFile(ctx.getId()), 0))
                     .simpleItem()
@@ -220,8 +207,7 @@ public class ModBlocks {
             REGISTRATE.block("radar_warning_receiver", RadarWarningReceiverBlock::new)
                     .initialProperties(SharedProperties::softMetal)
                     .properties(BlockBehaviour.Properties::noOcclusion)
-                    .tag(BlockTags.MINEABLE_WITH_PICKAXE)
-                    .tag(BlockTags.MINEABLE_WITH_AXE)
+                    .transform(axeOrPickaxe())
                     .simpleItem()
                     .register();
 

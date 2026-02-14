@@ -76,12 +76,11 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
     private @Nullable IRadar radarCache;
     private List<RadarTrack> cachedTracks = List.of();
     private DetectionConfig detectionCache = DetectionConfig.DEFAULT;
-    private @Nullable RadarTrack activeTrackCache;
+    public @Nullable RadarTrack activeTrackCache;
 
     private List<AutoPitchControllerBlockEntity> endpointCache = List.of();
     private long endpointCacheUntilTick = -1;
-    private long rangeCacheUntilTick = -1;
-    private double rangeCacheBlocks = 0.0;
+
 
     private @Nullable String lastPushedTrackId = null;
     private int lastPushedCfgHash = 0;
@@ -340,7 +339,7 @@ public class NetworkFiltererBlockEntity extends BlockEntity {
 
     private void pushToEndpoints(@Nullable RadarTrack track) {
         TargetingConfig cfg = targeting != null ? targeting : TargetingConfig.DEFAULT;
-
+        this.activeTrackCache = track;
         List<AutoPitchControllerBlockEntity> entities = (level instanceof ServerLevel sl) ? getWeaponEndpointsCached(sl) : List.of();
         for (AutoPitchControllerBlockEntity pitch : entities) {
 
