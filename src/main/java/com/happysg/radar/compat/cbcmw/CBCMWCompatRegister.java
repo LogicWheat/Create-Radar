@@ -18,6 +18,7 @@ public class CBCMWCompatRegister {
                 .lang("Radar Command Guidance")
                 .initialProperties(SharedProperties::softMetal)
                 .properties(BlockBehaviour.Properties::noOcclusion)
+                .properties(p -> p.strength(0.8f))
                 .blockstate((ctx, prov) -> prov.directionalBlock(ctx.getEntry(), prov.models()
                         .getExistingFile(ctx.getId()), 0))
                 .item(RadarGuidanceBlockItem::new)

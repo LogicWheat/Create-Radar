@@ -22,7 +22,8 @@ public enum Mods {
     CBC_AT,
     CREATEBIGCANNONS,
     CREATEENERGYCANNONS,
-    SHUPAPIUM;
+    SHUPAPIUM,
+    KABOOM;
     private final String id;
 
     Mods() {

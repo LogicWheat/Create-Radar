@@ -2,36 +2,19 @@ package com.happysg.radar.item.binos;
 
 import com.happysg.radar.CreateRadar;
 import com.happysg.radar.block.controller.networkcontroller.NetworkFiltererBlockEntity;
-import com.happysg.radar.block.monitor.MonitorBlockEntity;
-import com.happysg.radar.networking.NetworkHandler;
 import com.mojang.logging.LogUtils;
 import net.minecraft.ChatFormatting;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.SpyglassItem;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.HitResult;
-import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.InputEvent;
-import net.minecraftforge.client.event.RenderHandEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
@@ -59,7 +42,7 @@ public class Binoculars extends SpyglassItem {
         }
         if (pStack.getOrCreateTag().contains("filtererPos")) {
             BlockPos monitorPos = NbtUtils.readBlockPos(pStack.getOrCreateTag().getCompound("filtererPos"));
-            pTooltipComponents.add(Component.translatable(CreateRadar.MODID + ".binoculars.controller" + monitorPos.toShortString()));
+            pTooltipComponents.add(Component.translatable(CreateRadar.MODID + ".binoculars.controller").append(": " + monitorPos.toShortString()));
         } else {
             pTooltipComponents.add(Component.translatable(CreateRadar.MODID + ".binoculars.no_controller"));
         }

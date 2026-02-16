@@ -8,6 +8,7 @@ import com.happysg.radar.block.behavior.networks.config.DetectionConfig;
 import com.happysg.radar.block.radar.behavior.IRadar;
 import com.happysg.radar.block.radar.behavior.RadarScanningBlockBehavior;
 import com.happysg.radar.block.radar.track.RadarTrack;
+import com.happysg.radar.compat.Mods;
 import com.happysg.radar.compat.vs2.PhysicsHandler;
 import com.happysg.radar.compat.vs2.VS2Utils;
 import com.happysg.radar.config.RadarConfig;
@@ -297,6 +298,7 @@ public class RadarBearingBlockEntity extends MechanicalBearingBlockEntity implem
     }
     @Override
     public boolean renderRelativeToMonitor(){
+        if(!Mods.VALKYRIENSKIES.isLoaded()) return false;
         return (VS2Utils.isBlockInShipyard(level,getBlockPos()));
     }
     @Override

@@ -192,13 +192,13 @@ public class MonitorScreen extends Screen {
         Color color = new Color(RadarConfig.client().groundRadarColor.get());
         float a = (radar.getGlobalAngle() + 360f) % 360f;
         Direction monitorFacing = monitor.getBlockState().getValue(MonitorBlock.FACING);
-        Direction radarFacing = radar.getradarDirection();
+        Direction radarFacing = Direction.NORTH;
         if(radarFacing ==null)return;
         float facingOffset = radarFacingOffsetDeg(monitorFacing, radarFacing);
         float screenAngle = (a + facingOffset) % 360f;
         if(monitor.getController().getShip() == null && radar.getRadarType().equals("spinning")){
              monitorFacing = monitor.getBlockState().getValue(MonitorBlock.FACING);
-             radarFacing   = radar.getradarDirection();
+             radarFacing   = Direction.NORTH;
             if(radarFacing == null)return;
             LogUtils.getLogger().warn("here");
             MonitorRenderer.ConeDir2D cone = getConeDirectionOnMonitor(monitorFacing, radarFacing);
@@ -222,7 +222,7 @@ public class MonitorScreen extends Screen {
             }
 
             // Normalize to positive angles
-            screenAngle = (screenAngle + 360)+180 % 360;
+            screenAngle = (screenAngle + 360 + 180) % 360;
         }
         if(radar.renderRelativeToMonitor() && monitor.getController().getShip() != null && !radar.getRadarType().equals("spinning")){  // plane radar on a ship
             // Plane radar on ship - cone stays fixed, tracks rotate inside
@@ -239,6 +239,11 @@ public class MonitorScreen extends Screen {
                 default -> screenAngle = 30;
             }
             screenAngle = screenAngle + 90;
+        }
+        if (radar.renderRelativeToMonitor() && monitor.getController().getShip() != null
+                && radar.getRadarType().equals("spinning")) {
+            float shipYawDeg = (float) Math.toDegrees(getShipYawRad(monitor.getController().getShip()));
+            screenAngle += -(shipYawDeg + 180f);
         }
 
 
@@ -265,19 +270,32 @@ public class MonitorScreen extends Screen {
     public enum ConeDir2D { UP, RIGHT, DOWN, LEFT,NORTH }
 
     public MonitorRenderer.ConeDir2D getConeDirectionOnMonitor(Direction monitorFacing, Direction radarFacing) {
-        // i only handle horizontals; if something weird comes in i just treat it as up
-
-        int m = monitorFacing.get2DDataValue(); // 0..3
-        int r = radarFacing.get2DDataValue();   // 0..3
-        // i compute clockwise steps from monitor -> radar
-        int steps = (r - m) & 3; // fast mod 4
-
+        int steps = cwStepsBetween(monitorFacing, radarFacing);
         return switch (steps) {
             case 0 -> MonitorRenderer.ConeDir2D.NORTH;
             case 1 -> MonitorRenderer.ConeDir2D.RIGHT;
             case 2 -> MonitorRenderer.ConeDir2D.DOWN;
             case 3 -> MonitorRenderer.ConeDir2D.LEFT;
             default -> MonitorRenderer.ConeDir2D.UP;
+        };
+    }
+
+    private int cwStepsBetween(Direction from, Direction to) {
+        int a = dirIndex(from);
+        int b = dirIndex(to);
+        int steps = b - a;
+        steps %= 4;
+        if (steps < 0) steps += 4;
+        return steps;
+    }
+
+    private int dirIndex(Direction d) {
+        return switch (d) {
+            case NORTH -> 0;
+            case EAST  -> 1;
+            case SOUTH -> 2;
+            case WEST  -> 3;
+            default -> 0;
         };
     }
     public  float radarFacingOffsetDeg(Direction monitorFacing, Direction radarFacing) {
@@ -336,7 +354,10 @@ public class MonitorScreen extends Screen {
                 continue;
 
             Vec3 rel = track.position().subtract(radarPos);
-            rel = rotateAroundYDeg(rel, 0);
+            if (radar.renderRelativeToMonitor() && monitor.getController().getShip() != null) {
+                float shipYawDeg = (float) Math.toDegrees(getShipYawRad(monitor.getController().getShip()));
+                rel = rotateAroundYDeg(rel, -(shipYawDeg + 180f));
+            }
 
             float xOff = calculateTrackOffset(rel, monitor.getBlockState().getValue(MonitorBlock.FACING), range, true);
             float zOff = calculateTrackOffset(rel, monitor.getBlockState().getValue(MonitorBlock.FACING), range, false);

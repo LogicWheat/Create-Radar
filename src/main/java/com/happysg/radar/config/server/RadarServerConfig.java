@@ -20,9 +20,9 @@ public class RadarServerConfig extends ConfigBase {
     public final ConfigBool gearRadarBearingSpeed = b(true, "gearRadarBearingSpeed", "If true, radar bearings will rotate slower the more dishes are connected to them");
     public final ConfigInt planeRadarRange = i(250,1,1000,"planeRadarRange","increases the range of the plane radar(in blocks)");
     public final ConfigFloat controllerPhysbearingMaxSpeed = f(25,2,25,"controllerPhysbearingMaxSpeed", "Increases the max Rotational speed of phys bearings controlled by Pitch/Yaw controllers");
-    //public final ConfigInt maxRaysAllowed = i(1000,0,"maxRaysAllowed","The maximum number of active raycast checks performed by radar controlled turrets ");
     public final ConfigFloat guidedFuzeMaxSeekDegrees  = f(30.0f,1.0f,180f,"guidedFuzeMaxSeekDegrees","The size of the cone the guided fuze can track targets from. Values are in degrees and are bi-directional");
     public final ConfigFloat guidedFuzeMaxDegreesPerTick = f(3,1,"guidedFuzeMaxDegreesPerTick", "The maximum number of degrees per tick the guided fuze can correct its course");
     public final ConfigBool guidedFuzeSeekBeforeApex = b(false,"guidedFuzeSeekBeforeApex","Determines if the guided fuze can seek its target before it has began to fall");
+    public final ConfigInt binoRaycastRange = i(512,1,1000,"binocularRange", "The range at which the binocular can acquire a target");
 
 }

@@ -48,14 +48,12 @@ public class BinocularOverlay {
         int screenW = event.getWindow().getGuiScaledWidth();
         int screenH = event.getWindow().getGuiScaledHeight();
 
-        // i match this to the actual pixel size of my binocular overlay png
+
         final int TEX_W = 512;
         final int TEX_H = 256;
 
-        // base scale: fit to screen height (2:1 binocular aspect)
-        float baseScale = (float) screenH / (float) TEX_H;
 
-        // i reduce the size by ~20%
+        float baseScale = (float) screenH / (float) TEX_H;
         float scale = baseScale * 0.87f;
 
         int drawW = (int) (TEX_W * scale);
@@ -64,7 +62,7 @@ public class BinocularOverlay {
         int x0 = (screenW - drawW) / 2;
         int y0 = (screenH - drawH) / 2;
 
-        // black bars around the binocular overlay
+
         if (x0 > 0) {
             event.getGuiGraphics().fill(0, 0, x0, screenH, 0xFF000000);
             event.getGuiGraphics().fill(x0 + drawW, 0, screenW, screenH, 0xFF000000);
@@ -76,17 +74,14 @@ public class BinocularOverlay {
 
         RenderSystem.enableBlend();
         RenderSystem.enableDepthTest();
-        //RenderSystem.defaultBlendFunc();
-       // RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
+
 
         var pose = event.getGuiGraphics().pose();
         pose.pushPose();
 
-        // translate to center, then scale uniformly
         pose.translate(x0, y0, 0);
         pose.scale(scale, scale, 1f);
 
-        // draw at native texture resolution to avoid UV stretching or tiling
         event.getGuiGraphics().blit(
                 OVERLAY,
                 0, 0,

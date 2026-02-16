@@ -5,6 +5,7 @@ import com.happysg.radar.block.controller.id.IDManager;
 import com.happysg.radar.block.radar.behavior.IRadar;
 import com.happysg.radar.block.radar.track.RadarTrack;
 import com.happysg.radar.block.radar.track.TrackCategory;
+import com.happysg.radar.compat.Mods;
 import com.happysg.radar.compat.vs2.PhysicsHandler;
 import com.happysg.radar.config.RadarConfig;
 import com.happysg.radar.registry.ModRenderTypes;
@@ -256,6 +257,7 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
         // if we're rendering relative to the monitor, and the monitor is on a ship,
         // rotate the relative vector into ship-local axes so the screen rotates with the ship
         if (radar.renderRelativeToMonitor()) {
+            if(!Mods.VALKYRIENSKIES.isLoaded())return;
             Ship ship = monitor.getShip();
             if (ship != null) {
                 // i keep the cone "north-up" by counter-rotating track vectors by the ship yaw
@@ -533,7 +535,7 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
             }
 
             // Normalize to positive angles
-            monitorAngle = (monitorAngle + 360)+180 % 360;
+            monitorAngle = (monitorAngle + 360 + 180) % 360;
         }
         float currentAngle;
         if(radar.renderRelativeToMonitor() && controller.getShip() != null && !radar.getRadarType().equals("spinning")){  // plane radar on a ship
@@ -550,10 +552,11 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
                 case RIGHT -> currentAngle = 270;
                 default -> currentAngle = 30;
             }
-            currentAngle = currentAngle + 90;
+            currentAngle = currentAngle + 90 + radar.getGlobalAngle();
         }else{ // ground based spinning radar
             Direction monitorFacing = controller.getBlockState().getValue(MonitorBlock.FACING);
-            Direction radarFacing   = radar.getradarDirection();
+            // Global angle is already in world space; only align world-north to monitor.
+            Direction radarFacing   = Direction.NORTH;
             ConeDir2D cone = getConeDirectionOnMonitor(monitorFacing, radarFacing);
             switch (cone){
                 case NORTH -> currentAngle = 0 + radar.getGlobalAngle();
@@ -562,7 +565,6 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
                 case RIGHT -> currentAngle = 270 + radar.getGlobalAngle();
                 default -> currentAngle = 30;
             }
-            currentAngle = currentAngle + 180;
 
         }
 
@@ -633,11 +635,7 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
     public enum ConeDir2D { UP, RIGHT, DOWN, LEFT,NORTH }
 
     public ConeDir2D getConeDirectionOnMonitor(Direction monitorFacing, Direction radarFacing) {
-
-        int m = monitorFacing.get2DDataValue(); // 0..3
-        int r = radarFacing.get2DDataValue();   // 0..3
-        int steps = (r - m) & 3; // fast mod 4
-
+        int steps = cwStepsBetween(monitorFacing, radarFacing);
         return switch (steps) {
             case 0 -> ConeDir2D.NORTH;
             case 1 -> ConeDir2D.RIGHT;

@@ -2,6 +2,7 @@ package com.happysg.radar.networking.packets;
 
 
 import com.happysg.radar.CreateRadar;
+import com.happysg.radar.config.RadarConfig;
 import com.happysg.radar.item.binos.Binoculars;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -22,7 +23,7 @@ import net.minecraft.network.FriendlyByteBuf;
 public class RaycastPacket {
 
     // tune these however you want
-    private static final double MAX_DISTANCE = 256.0;
+    private static final double MAX_DISTANCE = RadarConfig.server().binoRaycastRange.get();
     private static final double STEP = 0.25;
 
     public RaycastPacket() {}
