@@ -957,6 +957,6 @@ public class AutoPitchControllerBlockEntity extends KineticBlockEntity {
             }
         }
 
-        return firingControl.checkLineOfSight(track.getPosition());
+        return firingControl.hasLineOfSightTo(track,requireLos);
     }
 }

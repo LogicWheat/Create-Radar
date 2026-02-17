@@ -552,7 +552,7 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
                 case RIGHT -> currentAngle = 270;
                 default -> currentAngle = 30;
             }
-            currentAngle = currentAngle + 90 + radar.getGlobalAngle();
+
         }else{ // ground based spinning radar
             Direction monitorFacing = controller.getBlockState().getValue(MonitorBlock.FACING);
             // Global angle is already in world space; only align world-north to monitor.
@@ -737,7 +737,7 @@ public class MonitorRenderer extends SmartBlockEntityRenderer<MonitorBlockEntity
                 false,
                 ms.last().pose(),
                 bufferSource,
-                Font.DisplayMode.SEE_THROUGH,
+                Font.DisplayMode.NORMAL,
                 0,
                 packedLight
         );

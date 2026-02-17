@@ -238,7 +238,7 @@ public class MonitorScreen extends Screen {
                 case RIGHT -> screenAngle = 270;
                 default -> screenAngle = 30;
             }
-            screenAngle = screenAngle + 90;
+
         }
         if (radar.renderRelativeToMonitor() && monitor.getController().getShip() != null
                 && radar.getRadarType().equals("spinning")) {
@@ -438,6 +438,10 @@ public class MonitorScreen extends Screen {
 
         for (RadarTrack track : monitor.cachedTracks) {
             Vec3 rel = track.position().subtract(radarPos);
+            if (radar.renderRelativeToMonitor() && monitor.getController().getShip() != null) {
+                float shipYawDeg = (float) Math.toDegrees(getShipYawRad(monitor.getController().getShip()));
+                rel = rotateAroundYDeg(rel, -(shipYawDeg + 180f));
+            }
 
             float xOff = calculateTrackOffset(rel, facing, range, true);
             float zOff = calculateTrackOffset(rel, facing, range, false);
